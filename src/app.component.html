@@ -1,0 +1,1157 @@
+<div class="max-w-[95vw] mx-auto transition-all duration-300">
+  <!-- Mode Switcher (top) -->
+  <div class="mb-4">
+    <app-mode-switcher></app-mode-switcher>
+  </div>
+
+  <div class="bg-white rounded-2xl shadow-2xl overflow-hidden mb-5">
+    <!-- Header (dynamic color) -->
+    <div
+      class="text-white p-6 text-center"
+      [style.background]="
+        'linear-gradient(135deg, ' +
+        cfg.gradientFrom +
+        ', ' +
+        cfg.gradientTo +
+        ')'
+      "
+    >
+      <h1 class="text-xl font-bold tracking-wide mb-2">
+        {{ cfg.headerTitle }}
+      </h1>
+      <p class="text-sm opacity-80">{{ cfg.headerSubtitle }}</p>
+    </div>
+
+    <div class="p-6">
+      <!-- Tabs -->
+      <div class="flex border-b-2 border-slate-200 mb-6 overflow-x-auto">
+        <button
+          (click)="activeTab.set('guide')"
+          [style.color]="activeTab() === 'guide' ? cfg.accentColor : ''"
+          [style.border-bottom-color]="
+            activeTab() === 'guide' ? cfg.accentColor : 'transparent'
+          "
+          [class.font-semibold]="activeTab() === 'guide'"
+          class="flex-1 py-3 text-sm text-slate-500 transition-all relative border-b-2 border-transparent -mb-0.5 whitespace-nowrap px-4"
+        >
+          📖 使い方
+        </button>
+        <button
+          (click)="activeTab.set('main')"
+          [style.color]="activeTab() === 'main' ? cfg.accentColor : ''"
+          [style.border-bottom-color]="
+            activeTab() === 'main' ? cfg.accentColor : 'transparent'
+          "
+          [class.font-semibold]="activeTab() === 'main'"
+          class="flex-1 py-3 text-sm text-slate-500 transition-all relative border-b-2 border-transparent -mb-0.5 whitespace-nowrap px-4"
+        >
+          {{ cfg.tabIcon }} 変換
+        </button>
+        <button
+          (click)="activeTab.set('result')"
+          [style.color]="activeTab() === 'result' ? cfg.accentColor : ''"
+          [style.border-bottom-color]="
+            activeTab() === 'result' ? cfg.accentColor : 'transparent'
+          "
+          [class.font-semibold]="activeTab() === 'result'"
+          [disabled]="!appLogic.csvData()"
+          [class.opacity-50]="!appLogic.csvData()"
+          [class.cursor-not-allowed]="!appLogic.csvData()"
+          class="flex-1 py-3 text-sm text-slate-500 transition-all relative border-b-2 border-transparent -mb-0.5 whitespace-nowrap px-4"
+        >
+          📝 結果確認
+        </button>
+        <button
+          (click)="activeTab.set('matching')"
+          [style.color]="activeTab() === 'matching' ? cfg.accentColor : ''"
+          [style.border-bottom-color]="
+            activeTab() === 'matching' ? cfg.accentColor : 'transparent'
+          "
+          [class.font-semibold]="activeTab() === 'matching'"
+          class="flex-1 py-3 text-sm text-slate-500 transition-all relative border-b-2 border-transparent -mb-0.5 whitespace-nowrap px-4"
+        >
+          ⚙️ ルール設定
+        </button>
+        <button
+          (click)="activeTab.set('master')"
+          [style.color]="activeTab() === 'master' ? cfg.accentColor : ''"
+          [style.border-bottom-color]="
+            activeTab() === 'master' ? cfg.accentColor : 'transparent'
+          "
+          [class.font-semibold]="activeTab() === 'master'"
+          class="flex-1 py-3 text-sm text-slate-500 transition-all relative border-b-2 border-transparent -mb-0.5 whitespace-nowrap px-4"
+        >
+          🗂️ マスター設定
+        </button>
+      </div>
+
+      <!-- ======= Guide Panel ======= -->
+      @if (activeTab() === "guide") {
+        <div class="space-y-6 animate-fade-in">
+          <div
+            [style.background-color]="cfg.bgLightHex"
+            class="border rounded-xl p-5"
+            [style.border-color]="cfg.accentColor + '30'"
+          >
+            <h2
+              class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"
+            >
+              🚀 弥生会計へのインポート手順
+            </h2>
+
+            <!-- Keyboard Shortcuts Cheat Sheet -->
+            <div class="mb-8 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+              <div class="bg-slate-50 px-4 py-3 border-b border-slate-200 font-bold text-slate-700 flex items-center gap-2">
+                ⌨️ キーボードショートカット一覧
+              </div>
+              <div class="p-0">
+                <table class="w-full text-sm text-left">
+                  <thead class="bg-slate-50 text-slate-500 font-medium">
+                    <tr>
+                      <th class="px-4 py-2 w-1/3">キー操作</th>
+                      <th class="px-4 py-2">機能</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-slate-100">
+                    <tr class="hover:bg-slate-50">
+                      <td class="px-4 py-2"><kbd class="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-mono text-xs shadow-sm">Ctrl</kbd> + <kbd class="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-mono text-xs shadow-sm">D</kbd></td>
+                      <td class="px-4 py-2 text-slate-700">一つ上のセルの値をコピー（日付や科目の連続入力に便利）</td>
+                    </tr>
+                    <tr class="hover:bg-slate-50">
+                      <td class="px-4 py-2"><kbd class="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-mono text-xs shadow-sm">Delete</kbd> / <kbd class="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-mono text-xs shadow-sm">Back</kbd></td>
+                      <td class="px-4 py-2 text-slate-700">選択中のセルをクリア・削除</td>
+                    </tr>
+                    <tr class="hover:bg-slate-50">
+                      <td class="px-4 py-2"><kbd class="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-mono text-xs shadow-sm">Ctrl</kbd> + <kbd class="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-mono text-xs shadow-sm">Z</kbd></td>
+                      <td class="px-4 py-2 text-slate-700">操作を元に戻す</td>
+                    </tr>
+                    <tr class="hover:bg-slate-50">
+                      <td class="px-4 py-2"><kbd class="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-mono text-xs shadow-sm">Esc</kbd></td>
+                      <td class="px-4 py-2 text-slate-700">編集をキャンセルして元の値に戻す</td>
+                    </tr>
+                    <tr class="hover:bg-slate-50">
+                      <td class="px-4 py-2 text-slate-500">ダブルクリック / <kbd class="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-mono text-xs shadow-sm">Enter</kbd></td>
+                      <td class="px-4 py-2 text-slate-700">編集モードを開始 / 確定して移動</td>
+                    </tr>
+                    <tr class="hover:bg-slate-50">
+                      <td class="px-4 py-2 text-slate-500">矢印キー (↑ ↓ ← →)</td>
+                      <td class="px-4 py-2 text-slate-700">セルの移動</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="text-slate-600 text-sm leading-relaxed space-y-3">
+              <p>
+                作成したCSVファイルは以下の手順で弥生会計に取り込んでください。
+              </p>
+              <ol class="list-decimal pl-5 space-y-2 font-medium">
+                <li>
+                  弥生会計を起動し、メニューから<strong>「仕訳日記帳」</strong>を開きます。
+                </li>
+                <li>
+                  左上の <strong>[ファイル]</strong> メニュー →
+                  <strong>[インポート]</strong> をクリックします。
+                </li>
+                <li>インポート画面が開きます。</li>
+                <li>
+                  <span class="text-red-600 font-bold">【重要】</span>
+                  ファイル選択ダイアログ右下のファイルの種類を「テキストファイル(*.txt)」から
+                  <strong>「すべてのファイル(*.*)」</strong>に変更します。
+                  <br /><span class="text-xs text-slate-500 font-normal"
+                    >※これをしないとCSVファイルが表示されません。</span
+                  >
+                </li>
+                <li>ダウンロードしたCSVファイルを選択します。</li>
+                <li><strong>[インポート]</strong> ボタンをクリックします。</li>
+                <li>
+                  「勘定科目や補助科目のマッチング」画面が出た場合は、指示に従い変換を行ってください。
+                </li>
+              </ol>
+            </div>
+
+            <div class="mt-6 text-center">
+              <button
+                (click)="appLogic.downloadManual()"
+                class="bg-gradient-to-b from-slate-50 to-slate-100 border border-slate-300 text-slate-700 px-8 py-3 rounded-lg font-bold text-sm hover:from-white hover:to-slate-50 hover:shadow-md transition-all shadow-sm flex items-center gap-2 mx-auto"
+              >
+                <span class="text-lg">📥</span> 手順書をダウンロード (テキスト)
+              </button>
+            </div>
+          </div>
+
+          <!-- CC: 仕訳パターン説明 -->
+          @if (modeService.activeMode() === "creditcard") {
+            <div class="bg-blue-50 border border-blue-100 rounded-xl p-5">
+              <h3 class="font-bold text-blue-800 mb-3 flex items-center gap-2">
+                💡 クレカ明細の仕訳パターン（未払金方式）
+              </h3>
+              <div class="text-sm text-slate-600 space-y-2">
+                <p>
+                  このツールでは<strong>「未払金パターン」</strong>で仕訳を作成します。
+                </p>
+                <div
+                  class="bg-white p-3 rounded-lg border border-blue-100 font-mono text-xs space-y-1"
+                >
+                  <p><strong>【カード利用日】</strong>このツールで自動作成</p>
+                  <p class="pl-4">
+                    借方: <span class="text-red-600">経費科目</span>（通信費等）
+                    / 貸方:
+                    <span class="text-blue-600">未払金</span>（カード名）
+                  </p>
+                  <p class="mt-2">
+                    <strong>【引落し日】</strong>別途手動で入力
+                  </p>
+                  <p class="pl-4">
+                    借方: <span class="text-blue-600">未払金</span>（カード名）
+                    / 貸方:
+                    <span class="text-green-600">普通預金</span>（銀行名）
+                  </p>
+                </div>
+              </div>
+            </div>
+          }
+
+          <!-- Receipt: 仕訳パターン説明 -->
+          @if (modeService.activeMode() === "receipt") {
+            <div class="bg-blue-50 border border-blue-100 rounded-xl p-5">
+              <h3 class="font-bold text-blue-800 mb-3 flex items-center gap-2">
+                💡 領収書の仕訳パターン（現金方式）
+              </h3>
+              <div class="text-sm text-slate-600 space-y-2">
+                <p>
+                  このツールでは<strong>「現金パターン」</strong>で仕訳を作成します。
+                </p>
+                <div
+                  class="bg-white p-3 rounded-lg border border-blue-100 font-mono text-xs space-y-1"
+                >
+                  <p><strong>【現金支払い日】</strong>このツールで自動作成</p>
+                  <p class="pl-4">
+                    借方:
+                    <span class="text-red-600">経費科目</span>（消耗品費等） /
+                    貸方: <span class="text-emerald-600">現金</span>
+                  </p>
+                </div>
+                <p class="text-xs text-slate-500 mt-2">
+                  ※ 領収書の日付で経費を計上し、貸方は「現金」固定です。
+                </p>
+              </div>
+
+              <h3
+                class="font-bold text-blue-800 mb-3 mt-4 flex items-center gap-2"
+              >
+                📋 摘要欄のフォーマット
+              </h3>
+              <div class="text-sm text-slate-600 space-y-2">
+                <p>弥生の摘要欄ルールに従い、以下の形式で出力します：</p>
+                <div
+                  class="bg-white p-3 rounded-lg border border-blue-100 font-mono text-xs space-y-2"
+                >
+                  <p>
+                    <strong>【形式】</strong> インボイス番号_店舗名_購入内容
+                  </p>
+                  <p class="text-emerald-700">
+                    例: T1234567890123_セブンイレブン_文房具
+                  </p>
+                  <p class="text-red-500">
+                    例: インボイスなし_個人タクシー_タクシー代
+                  </p>
+                </div>
+                <p class="text-xs text-slate-500 mt-2">
+                  ※
+                  インボイス番号がある場合はT+13桁、ない場合は「インボイスなし」が先頭に付きます。
+                </p>
+              </div>
+            </div>
+          }
+
+          <div class="grid gap-4">
+            <h3 class="font-bold text-slate-700">アプリの使い方フロー</h3>
+
+            <div
+              class="flex gap-4 items-start p-4 border border-slate-100 rounded-xl hover:bg-slate-50 transition-colors"
+            >
+              <div
+                class="w-8 h-8 rounded-full flex items-center justify-center font-bold shrink-0"
+                [style.background-color]="cfg.accentColor + '30'"
+                [style.color]="cfg.accentColor"
+              >
+                1
+              </div>
+              <div>
+                <h3 class="font-bold text-slate-700 mb-1">
+                  準備とアップロード
+                </h3>
+                <p class="text-xs text-slate-500 leading-relaxed">
+                  @if (modeService.activeMode() === "creditcard") {
+                    [変換]タブでAPIキー、カード名、年度を設定し、クレカ明細のPDFまたは画像を読み込みます。
+                  } @else if (modeService.activeMode() === "bank") {
+                    [変換]タブでAPIキー、銀行、年度を設定し、通帳の画像を読み込みます。
+                  } @else {
+                    [変換]タブでAPIキーと年度を設定し、領収書・レシートのPDFまたは画像を読み込みます。
+                  }
+                  <br />
+                  <span class="font-bold text-slate-700">消費税区分</span
+                  >（課税・免税・簡易課税）の設定もここで行います。
+                </p>
+                <div
+                  class="mt-2 bg-amber-50 text-amber-800 text-xs p-2 rounded border border-amber-100 font-bold"
+                >
+                  ⚠️ 重要:
+                  画像の文字が正しい向き（上）になるように、読み込み後に回転ボタンで調整してください。
+                </div>
+              </div>
+            </div>
+
+            <div
+              class="flex gap-4 items-start p-4 border border-slate-100 rounded-xl hover:bg-slate-50 transition-colors"
+            >
+              <div
+                class="w-8 h-8 rounded-full flex items-center justify-center font-bold shrink-0"
+                [style.background-color]="cfg.accentColor + '30'"
+                [style.color]="cfg.accentColor"
+              >
+                2
+              </div>
+              <div>
+                <h3 class="font-bold text-slate-700 mb-1">AIによる変換</h3>
+                <p class="text-xs text-slate-500 leading-relaxed">
+                  変換ボタンを押すとAIがデータを読み取ります。<br />
+                  <span class="font-bold" [style.color]="cfg.accentColor"
+                    >「変換後に編集画面を自動で開く」</span
+                  >にチェックを入れておくと、次のステップへ自動で移動します。
+                </p>
+              </div>
+            </div>
+
+            <div
+              class="flex gap-4 items-start p-4 border border-slate-100 rounded-xl hover:bg-slate-50 transition-colors"
+            >
+              <div
+                class="w-8 h-8 rounded-full flex items-center justify-center font-bold shrink-0"
+                [style.background-color]="cfg.accentColor + '30'"
+                [style.color]="cfg.accentColor"
+              >
+                3
+              </div>
+              <div>
+                <h3 class="font-bold text-slate-700 mb-1">
+                  確認・編集（任意）
+                </h3>
+                <p class="text-xs text-slate-500 leading-relaxed">
+                  [結果確認]タブで読み取ったデータを修正できます。<br />
+                  <span class="font-bold text-green-600"
+                    >勘定科目を変更すると、AIがそのルールを学習し、他の行や次回の変換に自動適用します。</span
+                  >
+                </p>
+              </div>
+            </div>
+
+            <div
+              class="flex gap-4 items-start p-4 border border-slate-100 rounded-xl hover:bg-slate-50 transition-colors"
+            >
+              <div
+                class="w-8 h-8 rounded-full flex items-center justify-center font-bold shrink-0"
+                [style.background-color]="cfg.accentColor + '30'"
+                [style.color]="cfg.accentColor"
+              >
+                4
+              </div>
+              <div>
+                <h3 class="font-bold text-slate-700 mb-1">CSVダウンロード</h3>
+                <p class="text-xs text-slate-500 leading-relaxed">
+                  編集が完了したらCSVをダウンロードし、弥生会計にインポートしてください。
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Journal Learning Section -->
+          <div class="bg-purple-50 border border-purple-200 rounded-xl p-5">
+            <h3 class="font-bold text-purple-800 mb-3 flex items-center gap-2">
+              📚 過去仕訳データから学習
+            </h3>
+            <p class="text-sm text-purple-700 mb-4">
+              弥生会計からエクスポートした仕訳日記帳CSVを読み込むと、摘要から<strong>勘定科目</strong>と<strong>税区分</strong>を自動学習します。学習したルールは全モード（クレカ/通帳/領収書）に自動配分されます。
+            </p>
+
+            <div class="flex items-center gap-3">
+              <button
+                (click)="journalFileInput.click()"
+                [disabled]="journalLearning.isProcessing()"
+                class="bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white px-6 py-2.5 rounded-lg font-bold text-sm shadow-md transition-all flex items-center gap-2"
+              >
+                @if (journalLearning.isProcessing()) {
+                  <div
+                    class="spinner w-4 h-4 border-2 border-white/30 border-t-white rounded-full"
+                  ></div>
+                  <span>処理中...</span>
+                } @else {
+                  <span>📂</span>
+                  <span>仕訳日記帳CSVを選択</span>
+                }
+              </button>
+              <input
+                #journalFileInput
+                type="file"
+                class="hidden"
+                accept=".csv"
+                (change)="onJournalFileSelected($event)"
+              />
+            </div>
+
+            @if (journalLearning.error()) {
+              <div
+                class="mt-3 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg flex items-start gap-2"
+              >
+                <span>⚠️</span><span>{{ journalLearning.error() }}</span>
+              </div>
+            }
+
+            @if (journalLearning.lastResult(); as result) {
+              <div
+                class="mt-4 p-4 bg-white border border-purple-200 rounded-lg space-y-2 animate-fade-in"
+              >
+                <div class="text-purple-800 font-bold flex items-center gap-2">
+                  ✅ 学習完了
+                </div>
+                <div class="text-sm text-slate-600 space-y-1">
+                  <p>
+                    読み込み仕訳数: <strong>{{ result.total }}件</strong>
+                  </p>
+                  <div class="grid grid-cols-2 gap-2 mt-2">
+                    <div
+                      class="bg-orange-50 border border-orange-100 rounded p-2 text-xs"
+                    >
+                      <span class="font-bold text-orange-700">💳 クレカ:</span>
+                      {{ result.ccRules }}件
+                    </div>
+                    <div
+                      class="bg-violet-50 border border-violet-100 rounded p-2 text-xs"
+                    >
+                      <span class="font-bold text-violet-700"
+                        >📄 通帳(出金):</span
+                      >
+                      {{ result.bankExpenseRules }}件
+                    </div>
+                    <div
+                      class="bg-green-50 border border-green-100 rounded p-2 text-xs"
+                    >
+                      <span class="font-bold text-green-700"
+                        >📄 通帳(入金):</span
+                      >
+                      {{ result.bankIncomeRules }}件
+                    </div>
+                    <div
+                      class="bg-emerald-50 border border-emerald-100 rounded p-2 text-xs"
+                    >
+                      <span class="font-bold text-emerald-700">🧾 領収書:</span>
+                      {{ result.receiptRules }}件
+                    </div>
+                  </div>
+                  @if (result.skipped > 0) {
+                    <p class="text-xs text-slate-400 mt-1">
+                      スキップ: {{ result.skipped }}件（摘要なし等）
+                    </p>
+                  }
+                </div>
+                <p class="text-xs text-purple-600 mt-2">
+                  ⚙️ 学習したルールは「ルール設定」タブで確認・編集できます。
+                </p>
+              </div>
+            }
+          </div>
+
+          <div class="text-center pt-4">
+            <button
+              (click)="activeTab.set('main')"
+              [style.background-color]="cfg.accentColor"
+              class="text-white px-8 py-3 rounded-full font-bold shadow-lg transition-all hover:-translate-y-1 hover:shadow-xl"
+            >
+              さっそく始める
+            </button>
+          </div>
+        </div>
+      }
+
+      <!-- ======= Main Panel (Conversion) ======= -->
+      @if (activeTab() === "main") {
+        <div class="space-y-6 animate-fade-in">
+          <!-- API Key -->
+          <div
+            [style.background-color]="cfg.bgLightHex"
+            class="border rounded-xl p-4"
+            [style.border-color]="cfg.accentColor + '40'"
+          >
+            <div class="flex gap-4">
+              <div class="flex-1">
+                <label
+                  class="block text-xs font-bold mb-2"
+                  [style.color]="cfg.accentColor"
+                  >🔑 Google AI Studio APIキー</label
+                >
+                <input
+                  type="password"
+                  [ngModel]="appLogic.apiKey()"
+                  (ngModelChange)="appLogic.updateApiKey($event)"
+                  (blur)="appLogic.fetchModels()"
+                  class="w-full p-2.5 border rounded-lg text-sm font-mono text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 bg-white"
+                  [style.border-color]="cfg.accentColor + '40'"
+                  placeholder="AIzaSy..."
+                />
+              </div>
+              <div class="w-1/3">
+                <div class="flex justify-between items-center mb-2">
+                  <label
+                    class="block text-xs font-bold"
+                    [style.color]="cfg.accentColor"
+                    >🤖 使用モデル</label
+                  >
+                  <button
+                    (click)="appLogic.fetchModels()"
+                    class="text-[10px] bg-slate-200 hover:bg-slate-300 text-slate-600 px-2 py-0.5 rounded transition-colors"
+                    title="モデルリストを更新"
+                  >
+                    更新
+                  </button>
+                </div>
+                <select
+                  [ngModel]="appLogic.selectedModel()"
+                  (ngModelChange)="appLogic.updateSelectedModel($event)"
+                  (click)="
+                    appLogic.modelList().length === 0
+                      ? appLogic.fetchModels()
+                      : null
+                  "
+                  class="w-full p-2.5 border rounded-lg text-sm bg-white font-mono text-slate-800"
+                  [style.border-color]="cfg.accentColor + '40'"
+                >
+                  <option value="gemini-2.0-flash">
+                    gemini-2.0-flash (Default)
+                  </option>
+                  @for (model of appLogic.modelList(); track model) {
+                    <option [value]="model">{{ model }}</option>
+                  }
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Settings (Card/Bank/Year) -->
+          <div class="bg-slate-50 rounded-xl p-4">
+            <div class="flex gap-4">
+              <!-- Card selection (CC mode) -->
+              @if (cfg.hasCardSelection) {
+                <div class="flex-1">
+                  <div
+                    class="text-xs font-bold text-slate-500 mb-3 flex items-center gap-1"
+                  >
+                    <span>💳 クレジットカードの設定</span>
+                  </div>
+                  <select
+                    [ngModel]="$any(appLogic).selectedCard()"
+                    (ngModelChange)="$any(appLogic).updateCard($event)"
+                    class="w-full p-3 border-2 border-slate-200 rounded-lg text-sm text-slate-800 bg-white cursor-pointer focus:outline-none transition-colors appearance-none"
+                    [style.--focus-color]="cfg.accentColor"
+                  >
+                    <option value="">-- 補助科目（カード名）を選択 --</option>
+                    @for (card of $any(appLogic).cardOptions(); track card) {
+                      <option [value]="card">{{ card }}</option>
+                    }
+                  </select>
+                </div>
+              }
+
+              <!-- Bank selection (Bank mode) -->
+              @if (cfg.hasBankSelection) {
+                <div class="flex-1">
+                  <div
+                    class="text-xs font-bold text-slate-500 mb-3 flex items-center gap-1"
+                  >
+                    <span>🏦 銀行口座の設定</span>
+                  </div>
+                  <select
+                    [ngModel]="$any(appLogic).selectedBank()"
+                    (ngModelChange)="$any(appLogic).updateBank($event)"
+                    class="w-full p-3 border-2 border-slate-200 rounded-lg text-sm text-slate-800 bg-white cursor-pointer focus:outline-none transition-colors appearance-none"
+                  >
+                    <option value="">-- 補助科目（銀行）を選択 --</option>
+                    @for (bank of $any(appLogic).bankOptions(); track bank) {
+                      <option [value]="bank">{{ bank }}</option>
+                    }
+                  </select>
+                </div>
+              }
+
+              <div
+                [class]="
+                  cfg.hasCardSelection || cfg.hasBankSelection
+                    ? 'w-1/3'
+                    : 'w-full'
+                "
+              >
+                <div
+                  class="text-xs font-bold text-slate-500 mb-3 flex items-center gap-1"
+                >
+                  <span>📅 基準年（対象年度）</span>
+                </div>
+                <input
+                  type="number"
+                  [ngModel]="appLogic.targetYear()"
+                  (ngModelChange)="appLogic.updateTargetYear($event)"
+                  class="w-full p-3 border-2 border-slate-200 rounded-lg text-sm text-slate-800 bg-white focus:outline-none text-center font-bold"
+                  placeholder="2024"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Settings (Tax) -->
+          <div class="bg-slate-50 rounded-xl p-4">
+            <div class="text-xs font-bold text-slate-500 mb-3">
+              TAX 課税区分の設定
+            </div>
+            <div class="grid grid-cols-3 gap-2 mb-4">
+              <button
+                (click)="appLogic.updateTaxType('standard')"
+                [style.background-color]="
+                  appLogic.taxType() === 'standard' ? cfg.bgLightHex : 'white'
+                "
+                [style.color]="
+                  appLogic.taxType() === 'standard' ? cfg.accentColor : ''
+                "
+                [style.border-color]="
+                  appLogic.taxType() === 'standard' ? cfg.accentColor : ''
+                "
+                class="w-full py-3 border border-slate-300 rounded-lg text-sm font-bold transition-all hover:bg-slate-50"
+              >
+                課税事業者
+              </button>
+              <button
+                (click)="appLogic.updateTaxType('exempt')"
+                [style.background-color]="
+                  appLogic.taxType() === 'exempt' ? cfg.bgLightHex : 'white'
+                "
+                [style.color]="
+                  appLogic.taxType() === 'exempt' ? cfg.accentColor : ''
+                "
+                [style.border-color]="
+                  appLogic.taxType() === 'exempt' ? cfg.accentColor : ''
+                "
+                class="w-full py-3 border border-slate-300 rounded-lg text-sm font-bold transition-all hover:bg-slate-50"
+              >
+                免税事業者
+              </button>
+              <button
+                (click)="appLogic.updateTaxType('simplified')"
+                [style.background-color]="
+                  appLogic.taxType() === 'simplified' ? cfg.bgLightHex : 'white'
+                "
+                [style.color]="
+                  appLogic.taxType() === 'simplified' ? cfg.accentColor : ''
+                "
+                [style.border-color]="
+                  appLogic.taxType() === 'simplified' ? cfg.accentColor : ''
+                "
+                class="w-full py-3 border border-slate-300 rounded-lg text-sm font-bold transition-all hover:bg-slate-50"
+              >
+                簡易課税
+              </button>
+            </div>
+
+            @if (appLogic.taxType() === "simplified") {
+              <div
+                class="bg-white border-2 rounded-lg p-4 space-y-4 animate-fade-in"
+                [style.border-color]="cfg.accentColor + '30'"
+              >
+                <div
+                  class="text-xs font-bold border-b pb-2 mb-2"
+                  [style.color]="cfg.accentColor"
+                  [style.border-color]="cfg.accentColor + '30'"
+                >
+                  簡易課税 詳細設定
+                </div>
+                <div class="flex items-center gap-4">
+                  <span class="text-xs font-bold text-slate-600 w-24"
+                    >経理方式:</span
+                  >
+                  <label class="flex items-center gap-2 cursor-pointer"
+                    ><input
+                      type="radio"
+                      name="smethod"
+                      value="inclusive"
+                      [checked]="appLogic.simplifiedMethod() === 'inclusive'"
+                      (change)="appLogic.updateSimplifiedMethod('inclusive')"
+                    /><span class="text-sm text-slate-700"
+                      >税込経理</span
+                    ></label
+                  >
+                  <label class="flex items-center gap-2 cursor-pointer"
+                    ><input
+                      type="radio"
+                      name="smethod"
+                      value="exclusive"
+                      [checked]="appLogic.simplifiedMethod() === 'exclusive'"
+                      (change)="appLogic.updateSimplifiedMethod('exclusive')"
+                    /><span class="text-sm text-slate-700"
+                      >税抜経理</span
+                    ></label
+                  >
+                </div>
+                @if (appLogic.simplifiedMethod() === "exclusive") {
+                  <div
+                    class="flex items-center gap-4 animate-fade-in bg-slate-50 p-2 rounded"
+                  >
+                    <span class="text-xs font-bold text-slate-600 w-24"
+                      >税計算:</span
+                    >
+                    <label class="flex items-center gap-2 cursor-pointer"
+                      ><input
+                        type="radio"
+                        name="scalc"
+                        value="internal"
+                        [checked]="appLogic.simplifiedCalcType() === 'internal'"
+                        (change)="appLogic.updateSimplifiedCalcType('internal')"
+                      /><span class="text-sm text-slate-700">内税</span></label
+                    >
+                    <label class="flex items-center gap-2 cursor-pointer"
+                      ><input
+                        type="radio"
+                        name="scalc"
+                        value="external"
+                        [checked]="appLogic.simplifiedCalcType() === 'external'"
+                        (change)="appLogic.updateSimplifiedCalcType('external')"
+                      /><span class="text-sm text-slate-700">外税</span></label
+                    >
+                  </div>
+                }
+                <div class="flex items-center gap-4">
+                  <span class="text-xs font-bold text-slate-600 w-24"
+                    >適用税率:</span
+                  >
+                  <label class="flex items-center gap-2 cursor-pointer"
+                    ><input
+                      type="radio"
+                      name="srate"
+                      value="10%"
+                      [checked]="appLogic.simplifiedTaxRate() === '10%'"
+                      (change)="appLogic.updateSimplifiedTaxRate('10%')"
+                    /><span class="text-sm text-slate-700">10%</span></label
+                  >
+                  <label class="flex items-center gap-2 cursor-pointer"
+                    ><input
+                      type="radio"
+                      name="srate"
+                      value="8%"
+                      [checked]="appLogic.simplifiedTaxRate() === '8%'"
+                      (change)="appLogic.updateSimplifiedTaxRate('8%')"
+                    /><span class="text-sm text-slate-700">軽減8%</span></label
+                  >
+                </div>
+                <div>
+                  <div class="text-xs font-bold text-slate-600 mb-2">
+                    事業区分 (みなし仕入率):
+                  </div>
+                  <select
+                    [ngModel]="appLogic.simplifiedBizClass()"
+                    (ngModelChange)="appLogic.updateSimplifiedBizClass(+$event)"
+                    class="w-full p-2 border border-slate-300 rounded text-sm bg-white text-slate-800"
+                  >
+                    <option [value]="1">第一種 (卸売業) 90%</option>
+                    <option [value]="2">第二種 (小売業) 80%</option>
+                    <option [value]="3">第三種 (製造業等) 70%</option>
+                    <option [value]="4">第四種 (その他) 60%</option>
+                    <option [value]="5">第五種 (サービス業等) 50%</option>
+                    <option [value]="6">第六種 (不動産業) 40%</option>
+                  </select>
+                </div>
+              </div>
+            }
+          </div>
+
+          <!-- Upload -->
+          @if (appLogic.pages().length === 0) {
+            @if (appLogic.isLoading()) {
+              <div
+                class="py-12 text-center bg-slate-50 rounded-xl border border-slate-100"
+              >
+                <div
+                  class="spinner w-10 h-10 border-4 border-slate-200 rounded-full mx-auto mb-3"
+                  [style.border-top-color]="cfg.accentColor"
+                ></div>
+                <div class="text-slate-500 text-sm animate-pulse">
+                  ファイルを読み込み中...
+                </div>
+              </div>
+            } @else {
+              <div
+                (click)="triggerFileInput(fileInput)"
+                (dragover)="onDragOver($event)"
+                (dragleave)="onDragLeave($event)"
+                (drop)="onDrop($event)"
+                [style.background-color]="isDragging() ? cfg.bgLightHex : ''"
+                [style.border-color]="isDragging() ? cfg.accentColor : ''"
+                class="border-2 border-dashed border-slate-300 rounded-xl p-10 text-center cursor-pointer transition-all bg-slate-50 group hover:bg-slate-100"
+              >
+                <div
+                  class="text-4xl mb-4 group-hover:scale-110 transition-transform duration-300"
+                >
+                  {{ cfg.uploadIcon }}
+                </div>
+                <div class="text-slate-700 font-medium mb-2">
+                  {{ cfg.uploadText }}
+                </div>
+                <div class="text-xs text-slate-400">
+                  または クリックしてファイル（PDF, 画像）を選択
+                </div>
+                <input
+                  #fileInput
+                  type="file"
+                  class="hidden"
+                  accept="image/*,application/pdf"
+                  (change)="onFileSelected($event)"
+                />
+              </div>
+            }
+          }
+
+          <!-- Preview & Action -->
+          @if (appLogic.pages().length > 0) {
+            <div class="space-y-4 animate-fade-in">
+              <div class="flex justify-between items-end mb-2 px-1">
+                <span class="text-xs text-slate-500 font-bold"
+                  >読み込んだページ ({{ appLogic.pages().length }}枚)</span
+                >
+                <button
+                  (click)="appLogic.clearAllFiles()"
+                  class="text-xs text-slate-400 hover:text-red-500 hover:bg-red-50 px-3 py-1.5 rounded transition-colors flex items-center gap-1 font-bold"
+                >
+                  <span>🗑️</span> すべて削除
+                </button>
+              </div>
+
+              <div class="space-y-4">
+                @for (page of appLogic.pages(); track page.id; let i = $index) {
+                  <div
+                    class="relative bg-slate-800 rounded-xl overflow-hidden shadow-md group border border-slate-700"
+                  >
+                    <div class="absolute top-2 left-2 z-10 flex gap-2">
+                      <button
+                        (click)="appLogic.rotatePageLeft(i)"
+                        class="bg-white/90 hover:bg-white text-slate-700 w-9 h-9 flex items-center justify-center rounded-lg shadow-lg transition-all hover:scale-105 active:scale-95 border border-slate-200"
+                        title="左回転"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          class="w-5 h-5"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"
+                          />
+                        </svg>
+                      </button>
+                      <button
+                        (click)="appLogic.rotatePageRight(i)"
+                        class="bg-white/90 hover:bg-white text-slate-700 w-9 h-9 flex items-center justify-center rounded-lg shadow-lg transition-all hover:scale-105 active:scale-95 border border-slate-200"
+                        title="右回転"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          class="w-5 h-5"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M21 10H11a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                    <div class="absolute top-2 right-2 z-10">
+                      <button
+                        (click)="appLogic.removePage(i)"
+                        class="bg-red-500 hover:bg-red-600 text-white w-9 h-9 flex items-center justify-center rounded-lg shadow-lg transition-all hover:scale-105 active:scale-95 border border-red-600"
+                        title="このページを削除"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          class="w-5 h-5"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                    <div
+                      class="absolute bottom-2 right-2 z-10 bg-black/60 backdrop-blur-sm text-white text-[10px] px-2 py-1 rounded-full font-mono border border-white/20"
+                    >
+                      {{ i + 1 }} / {{ appLogic.pages().length }}
+                    </div>
+                    <div
+                      class="p-4 flex justify-center items-center bg-slate-700/50 min-h-[200px]"
+                    >
+                      <img
+                        [src]="page.image"
+                        [style.transform]="'rotate(' + page.rotation + 'deg)'"
+                        class="max-w-full max-h-[400px] object-contain transition-transform duration-300 ease-in-out rounded-sm shadow-sm"
+                      />
+                    </div>
+                  </div>
+                }
+              </div>
+
+              <!-- Processing Controls -->
+              @if (!appLogic.isLoading()) {
+                <div class="sticky bottom-4 z-20 space-y-2">
+                  @if (appLogic.error()) {
+                    <div
+                      class="p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl flex items-start gap-2 shadow-sm animate-fade-in"
+                    >
+                      <span>⚠️</span><span>{{ appLogic.error() }}</span>
+                    </div>
+                  }
+
+                  @if (!appLogic.csvData()) {
+                    <div
+                      class="bg-white/95 backdrop-blur-sm p-4 rounded-xl border border-slate-200 shadow-xl space-y-3"
+                    >
+                      <div class="text-center text-xs text-slate-500 mb-2">
+                        画像の向きを調整してから変換してください。
+                      </div>
+
+                      <div
+                        class="flex items-center justify-center gap-3 mb-2 p-2 rounded-lg border"
+                        [style.background-color]="cfg.bgLightHex + 'cc'"
+                        [style.border-color]="cfg.accentColor + '40'"
+                      >
+                        <input
+                          type="checkbox"
+                          id="autoRedirect"
+                          [ngModel]="appLogic.autoRedirectToEdit()"
+                          (ngModelChange)="
+                            appLogic.updateAutoRedirectToEdit($event)
+                          "
+                          class="w-5 h-5 border-slate-300 rounded"
+                        />
+                        <label
+                          for="autoRedirect"
+                          class="text-sm font-bold text-slate-800 cursor-pointer select-none flex flex-col items-start"
+                        >
+                          <span>変換後に編集画面を自動で開く</span>
+                          <span class="text-[10px] text-slate-500 font-normal"
+                            >チェックすると、完了後に「結果確認」タブへ自動移動します</span
+                          >
+                        </label>
+                      </div>
+
+                      <button
+                        (click)="runProcess()"
+                        [style.background]="
+                          'linear-gradient(135deg, ' +
+                          cfg.gradientFrom +
+                          ', ' +
+                          cfg.gradientTo +
+                          ')'
+                        "
+                        class="w-full py-4 text-white rounded-xl font-bold text-lg shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all active:translate-y-0"
+                      >
+                        🔄 すべてのページをCSVに変換する
+                      </button>
+                    </div>
+                  } @else {
+                    <div
+                      class="bg-white/95 backdrop-blur-sm p-4 rounded-xl border border-slate-200 shadow-xl space-y-3 animate-fade-in"
+                    >
+                      <div class="text-center text-green-700 font-bold mb-2">
+                        ✅ 変換完了
+                      </div>
+
+                      @if (
+                        $any(appLogic).tokenUsage &&
+                          $any(appLogic).tokenUsage();
+                        as usage
+                      ) {
+                        <div
+                          class="flex justify-center gap-4 mb-2 text-xs font-mono text-slate-500 bg-slate-50 py-1.5 rounded border border-slate-100"
+                        >
+                          <span title="Input Tokens"
+                            >📥 In:
+                            <strong>{{ usage.input | number }}</strong></span
+                          >
+                          <span class="text-slate-300">|</span>
+                          <span title="Output Tokens"
+                            >📤 Out:
+                            <strong>{{ usage.output | number }}</strong></span
+                          >
+                        </div>
+                      }
+
+                      <button
+                        (click)="appLogic.downloadCsv()"
+                        class="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center justify-center gap-2"
+                      >
+                        📥 すぐにCSVをダウンロード
+                      </button>
+                      <div class="text-center text-xs text-slate-400 my-1">
+                        - または -
+                      </div>
+                      <button
+                        (click)="activeTab.set('result')"
+                        class="w-full py-3 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg font-bold shadow-sm transition-colors flex items-center justify-center gap-2"
+                      >
+                        📝 結果を確認・編集する
+                      </button>
+                    </div>
+                  }
+                </div>
+              }
+
+              <!-- Loading -->
+              @if (appLogic.isLoading()) {
+                <div
+                  class="py-8 text-center bg-slate-50 rounded-xl border border-slate-100"
+                >
+                  <div
+                    class="spinner w-10 h-10 border-4 border-slate-200 rounded-full mx-auto mb-3"
+                    [style.border-top-color]="cfg.accentColor"
+                  ></div>
+                  <div class="text-slate-500 text-sm animate-pulse">
+                    {{ cfg.loadingText }}
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
+
+      <!-- ======= Result Confirmation & Edit Panel ======= -->
+      @if (activeTab() === "result") {
+        <div class="space-y-4 animate-fade-in">
+          @if (!appLogic.csvData()) {
+            <div class="text-center py-10 text-slate-500">
+              <div class="text-4xl mb-4">📭</div>
+              <p>まだ変換データがありません。</p>
+              <button
+                (click)="activeTab.set('main')"
+                class="mt-4 underline"
+                [style.color]="cfg.accentColor"
+              >
+                変換画面へ戻る
+              </button>
+            </div>
+          } @else {
+
+            <!-- Split View Layout -->
+            <div class="flex flex-col lg:flex-row gap-4 h-[calc(100vh-250px)] min-h-[600px] transition-all duration-300">
+              
+              <!-- Left: Image Viewer (50%) -->
+              <div class="lg:w-1/2 h-[300px] lg:h-full flex flex-col">
+                 <app-image-viewer [images]="appLogic.pages()" class="flex-1 h-full"></app-image-viewer>
+              </div>
+
+              <!-- Right: Grid (50%) -->
+              <div class="lg:w-1/2 flex flex-col gap-4 h-full">
+                <div class="p-3 bg-green-50 border border-green-200 rounded-xl shrink-0">
+                  <div class="flex items-center gap-2 text-green-800 font-bold text-sm mb-1">
+                    ✅ 変換結果の確認・編集
+                    <button 
+                      (click)="undo()" 
+                      [disabled]="!historyService.canUndo()"
+                      class="ml-4 px-2 py-1 text-xs bg-white border border-green-300 rounded hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
+                      title="Ctrl + Z">
+                      <span>↩</span> 元に戻す
+                    </button>
+                  </div>
+                  <p class="text-xs text-green-700">
+                    修正内容は次回から自動適用されます。
+                  </p>
+                   @if (modeService.activeMode() === "receipt") {
+                    <p class="text-[10px] text-green-600 mt-1">
+                      摘要: <code class="bg-white px-1 rounded">インボイス_店名_品目</code>
+                    </p>
+                  }
+                </div>
+
+            <!-- Transaction Editor Table -->
+            <app-transaction-grid
+              class="flex-1 overflow-hidden min-h-0"
+              [transactions]="appLogic.processedTransactions()"
+              [hasTypeColumn]="cfg.hasTypeColumn"
+              [hasInvoiceNumber]="cfg.hasInvoiceNumber"
+              [expenseOptions]="appLogic.expenseAccountOptions()"
+              [incomeOptions]="$any(appLogic).incomeAccountOptions ? $any(appLogic).incomeAccountOptions() : []"
+              (update)="updateTx($event.index, $event.field, $event.value)"
+              (delete)="deleteTx($event)">
+            </app-transaction-grid>
+
+            <!-- CSV Options -->
+            <div
+              class="bg-white p-4 rounded-xl border border-slate-200 flex items-center justify-between gap-4"
+            >
+              <div class="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="showSystemCols"
+                  [ngModel]="appLogic.showSystemColumns()"
+                  (ngModelChange)="appLogic.updateShowSystemColumns($event)"
+                  class="w-4 h-4 border-slate-300 rounded"
+                />
+                <label
+                  for="showSystemCols"
+                  class="text-sm text-slate-700 cursor-pointer select-none"
+                >
+                  弥生インポート用情報（フラグ・タイプ等）を含める
+                </label>
+              </div>
+
+              <div class="text-right text-xs text-slate-400">
+                自動保存済み・即時CSV反映
+              </div>
+            </div>
+
+            <button
+              (click)="appLogic.downloadCsv()"
+              class="w-full py-4 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 text-lg"
+            >
+              <span>📥</span> CSVをダウンロード
+            </button>
+              </div> <!-- End Right Column -->
+            </div> <!-- End Split View -->
+          }
+        </div>
+      }
+
+      <!-- Matching Settings Panel -->
+      @if (activeTab() === "matching") {
+        <app-matching-settings></app-matching-settings>
+      }
+
+      <!-- Master Settings Panel -->
+      @if (activeTab() === "master") {
+        <app-master-settings></app-master-settings>
+      }
+    </div>
+  </div>
+
+  <div class="text-center p-4 text-white/70 text-xs">
+    KISS原則に基づくシンプル設計 | {{ cfg.headerTitle }}
+  </div>
+</div>
