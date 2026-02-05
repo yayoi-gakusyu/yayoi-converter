@@ -34,12 +34,12 @@ jobs:
         run: npm run build -- --base-href /yayoi-converter/
 
       - name: Copy 404.html for SPA routing
-        run: cp dist/browser/index.html dist/browser/404.html
+        run: cp dist/index.html dist/404.html
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: "./dist/browser"
+          path: "./dist"
 
   deploy:
     environment:
