@@ -221,6 +221,9 @@ export class TransactionGridComponent {
   }
 
   focusCell(idx: number, col: string) {
+    if (this.focusedRow() === idx && this.focusedCol() === col && this.isEditingState()) {
+        return;
+    }
     this.focusedRow.set(idx);
     this.focusedCol.set(col);
     this.isEditingState.set(false);
