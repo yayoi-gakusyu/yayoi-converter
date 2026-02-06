@@ -128,9 +128,17 @@ export class ReceiptLogicService {
 
   private loadState() {
     const s = (key: string) => localStorage.getItem(this.prefix + key);
+    
+    // Unified key checking - Prioritize unified key!
     const unifiedKey = localStorage.getItem('unified_apiKey');
-    if (unifiedKey) this.apiKey.set(unifiedKey);
-    if (s('apiKey')) this.apiKey.set(s('apiKey')!);
+
+    // Load API Key: Unified > Specific
+    if (unifiedKey) {
+        this.apiKey.set(unifiedKey);
+    } else if (s('apiKey')) {
+        this.apiKey.set(s('apiKey')!);
+    }
+    
     if (s('selectedModel')) this.selectedModel.set(s('selectedModel')!);
     this.taxType.set((s('taxType') as TaxType) || 'standard');
     if (s('simplifiedMethod')) this.simplifiedMethod.set(s('simplifiedMethod') as any);

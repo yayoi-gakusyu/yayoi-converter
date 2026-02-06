@@ -239,10 +239,23 @@ export class CreditCardLogicService {
 
   private loadState() {
     const s = (key: string) => localStorage.getItem(this.prefix + key);
-    // Also check unified API key
-    const unifiedKey = localStorage.getItem("unified_apiKey");
-    if (unifiedKey) this.apiKey.set(unifiedKey);
-    if (s("apiKey")) this.apiKey.set(s("apiKey")!);
+    
+    // Unified key checking - Prioritize unified key!
+    const unifiedKey = localStorage.getItem('unified_apiKey');
+
+    // Legacy migration
+    const legacyApiKey = localStorage.getItem('apiKey');
+    if (legacyApiKey && !unifiedKey && !s('apiKey')) {
+       localStorage.setItem(this.prefix + 'apiKey', legacyApiKey);
+    }
+
+    // Load API Key: Unified > Specific > Legacy
+    if (unifiedKey) {
+        this.apiKey.set(unifiedKey);
+    } else if (s('apiKey')) {
+        this.apiKey.set(s('apiKey')!);
+    }
+    
     if (s("selectedModel")) this.selectedModel.set(s("selectedModel")!);
     if (s("selectedCard")) this.selectedCard.set(s("selectedCard")!);
     this.taxType.set((s("taxType") as TaxType) || "standard");

@@ -147,19 +147,31 @@ export class BankLogicService {
 
   private loadState() {
     const s = (key: string) => localStorage.getItem(this.prefix + key);
-    // Also check legacy keys (from standalone bank app) and unified API key
+    // Unified key checking - Prioritize unified key!
     const unifiedKey = localStorage.getItem('unified_apiKey');
-    if (unifiedKey) this.apiKey.set(unifiedKey);
-    // Legacy migration: old bank app used bare keys
+    
+    // Legacy support
     const legacyApiKey = localStorage.getItem('apiKey');
-    if (legacyApiKey && !s('apiKey')) localStorage.setItem(this.prefix + 'apiKey', legacyApiKey);
+    if (legacyApiKey && !unifiedKey && !s('apiKey')) {
+       localStorage.setItem(this.prefix + 'apiKey', legacyApiKey);
+    }
+
+    // Load API Key: Unified > Specific > Legacy
+    if (unifiedKey) {
+        this.apiKey.set(unifiedKey);
+    } else if (s('apiKey')) {
+        this.apiKey.set(s('apiKey')!);
+    }
+    
+    // ... rest of legacy migration for other fields ...
     const legacyBank = localStorage.getItem('selectedBank');
     if (legacyBank && !s('selectedBank')) localStorage.setItem(this.prefix + 'selectedBank', legacyBank);
     const legacyKeys = ['taxType', 'simplifiedMethod', 'simplifiedCalcType', 'simplifiedBizClass', 'simplifiedTaxRate',
       'showSystemColumns', 'autoRedirectToEdit', 'expenseRules', 'incomeRules', 'bankOptions', 'expenseAccountOptions', 'incomeAccountOptions'];
     legacyKeys.forEach(k => { const v = localStorage.getItem(k); if (v && !s(k)) localStorage.setItem(this.prefix + k, v); });
 
-    if (s('apiKey')) this.apiKey.set(s('apiKey')!);
+    // Load other state
+    if (s('selectedModel')) this.selectedModel.set(s('selectedModel')!);
     if (s('selectedBank')) this.selectedBank.set(s('selectedBank')!);
     this.taxType.set((s('taxType') as TaxType) || 'standard');
     if (s('simplifiedMethod')) this.simplifiedMethod.set(s('simplifiedMethod') as any);
@@ -187,6 +199,22 @@ export class BankLogicService {
 
   updateApiKey(key: string) { this.apiKey.set(key); localStorage.setItem('unified_apiKey', key); }
   updateSelectedModel(model: string) { this.selectedModel.set(model); }
+  
+  async fetchModels() {
+    const key = this.apiKey();
+    if (!key) return;
+    try {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
+      if (!response.ok) return;
+      const data = await response.json();
+      const models = (data.models || [])
+        .map((m: any) => m.name.replace('models/', ''))
+        .filter((m: string) => m.includes('gemini'));
+      this.modelList.set(models);
+    } catch (e) {
+      console.error('Model fetch failed', e);
+    }
+  }
   updateBank(bank: string) { this.selectedBank.set(bank); }
   updateTargetYear(year: number) { this.targetYear.set(year); }
   updateTaxType(type: TaxType) { this.taxType.set(type); }
