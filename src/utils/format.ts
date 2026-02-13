@@ -2,7 +2,7 @@
 export function normalizeDescription(text: string, maxLength: number = 64): string {
     if (!text) return '';
     // 1. Remove newlines and tabs
-    let normalized = text.replace(/[\r\n\t]+/g, ' ');
+    let normalized = text.replace(/[\r\n\t]+/g, '');
     
     // 2. Trim
     normalized = normalized.trim();

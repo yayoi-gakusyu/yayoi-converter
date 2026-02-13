@@ -5,11 +5,12 @@ function calculateTax(amount: number, taxType: string, taxCategory: string): str
     const absAmount = Math.abs(amount);
     let rate = 0;
     // Robust tax rate detection
-    if (taxCategory.match(/[1１]0[%％]/)) rate = 0.1;
+    if (taxCategory.match(/[1１][0０][%％]/)) rate = 0.1;
     else if (taxCategory.match(/[8８][%％]/)) rate = 0.08;
 
     if (rate > 0 && taxType === 'standard') {
-        const tax = Math.floor(absAmount * rate / (1 + rate));
+        // Use epsilon to fix floating point issues (1100 * 0.1 / 1.1 = 99.999...)
+        const tax = Math.floor((absAmount * rate / (1 + rate)) + 0.000001);
         return tax > 0 ? tax.toString() : '';
     }
     return '';
