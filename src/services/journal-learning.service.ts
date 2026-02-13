@@ -1,7 +1,7 @@
 import { Injectable, signal, inject } from '@angular/core';
-import { JournalPattern } from '../types';
+import { SupabaseService } from './supabase.service';
+import { Rule, JournalPattern } from '../types';
 import * as Encoding from 'encoding-japanese';
-import { SupabaseService, LearningRule } from './supabase.service';
 
 interface ParsedJournalEntry {
   debitAccount: string;
@@ -43,7 +43,7 @@ export class JournalLearningService {
     this.supabase.subscribeToRules((payload: any) => {
         // payload.new contains the new record
         if (payload.new) {
-            const rule = payload.new as LearningRule;
+            const rule = payload.new as Rule;
             this.updateLocalRule(rule);
         }
     });
@@ -71,13 +71,13 @@ export class JournalLearningService {
   }
 
   // Helper to update local map from a Rule object
-  private updateLocalRule(rule: LearningRule) {
+  private updateLocalRule(rule: Rule) {
       const map = new Map(this.learningRules()); // Clone
       map.set(this.normalize(rule.keyword), {
           targetDescription: rule.keyword,
           account: rule.account,
           subAccount: rule.sub_account,
-          taxType: rule.tax_type
+          taxType: rule.taxCategory
       });
       this.learningRules.set(map);
   }
@@ -114,11 +114,11 @@ export class JournalLearningService {
     const normalized = this.normalize(description);
 
     // 1. Optimistic UI Update
-    const rule: LearningRule = {
+    const rule: Rule = {
         keyword: normalized,
         account: account,
         sub_account: subAccount,
-        tax_type: taxType
+        taxCategory: taxType
     };
     this.updateLocalRule(rule);
 

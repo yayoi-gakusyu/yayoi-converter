@@ -257,7 +257,7 @@ import { TAX_CATEGORIES_EXPENSE, TAX_CATEGORIES_INCOME, calculateTaxFromCategory
        <div class="fixed bottom-6 right-6 bg-white shadow-2xl border border-slate-200 p-4 rounded-xl z-50 flex flex-col gap-3 animate-fade-in-up w-80">
            <div class="flex justify-between items-center border-b border-slate-100 pb-2">
              <span class="font-bold text-slate-700">⚡ 一括編集 ({{ selectedRows().size }}件)</span>
-             <button (click)="selectedRows().set(new Set())" class="text-xs text-slate-400 hover:text-slate-600">解除</button>
+             <button (click)="clearSelection()" class="text-xs text-slate-400 hover:text-slate-600">解除</button>
            </div>
            
            <div class="space-y-2">
@@ -501,6 +501,20 @@ export class TransactionGridComponent {
       } else {
           this.selectedRows.set(new Set());
       }
+  }
+
+  toggleSelection(index: number) {
+    if (this.selectedRows().has(index)) {
+      this.selectedRows().delete(index);
+    } else {
+      this.selectedRows().add(index);
+    }
+    // Trigger signal update
+    this.selectedRows.set(new Set(this.selectedRows()));
+  }
+
+  clearSelection() {
+      this.selectedRows.set(new Set());
   }
 
   isSelected(index: number) {
