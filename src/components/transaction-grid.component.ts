@@ -154,8 +154,6 @@ import { Transaction } from '../types';
                 </td>
               }
 
-                  }
-              }
 
               <!-- Tax Amount -->
               <td class="p-0 border-r border-slate-100 relative"

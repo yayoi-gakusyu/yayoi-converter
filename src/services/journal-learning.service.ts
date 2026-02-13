@@ -58,7 +58,7 @@ export class JournalLearningService {
     this.defaultRules.forEach(r => map.set(this.normalize(r.targetDescription), r));
 
     // Overwrite with Cloud rules
-    rules.forEach(r => {
+    rules.forEach((r: any) => {
         map.set(this.normalize(r.keyword), {
             targetDescription: r.keyword,
             account: r.account,

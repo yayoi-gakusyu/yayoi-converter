@@ -3,6 +3,13 @@ import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabas
 import { environment } from '../environments/environment';
 import { Rule } from '../types';
 
+export interface LearningRule {
+  keyword: string;
+  account: string;
+  sub_account?: string;
+  tax_type?: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -115,6 +122,25 @@ export class SupabaseService {
          () => callback()
       )
       .subscribe();
+  }
+
+  subscribeToRules(callback: (payload: any) => void) {
+      if (!this.channel) {
+          this.subscribeToChanges(() => {}); // Ensure channel implies subscription
+      }
+      // Re-subscribe or add specific listener if needed. 
+      // For now, attaching a new listener to the existing channel flow might be tricky without refactoring.
+      // But based on the error "subscribeToRules does not exist", we just need the method.
+      // A simple implementation that hooks into the existing channel setup:
+      
+      // If channel doesn't exist, create it with this callback for rules
+      const channel = this.supabase.channel('public:learning_rules_sub')
+        .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'learning_rules' },
+             (payload) => callback(payload)
+        )
+        .subscribe();
   }
 }
 
