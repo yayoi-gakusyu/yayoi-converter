@@ -6,6 +6,7 @@ import { SupabaseService } from './supabase.service';
 import Encoding from 'encoding-japanese';
 import { calculateTaxFromCategory } from '../utils/tax';
 import { normalizeDescription, escapeCsvCell } from '../utils/format';
+import { generateContentWithRetry } from '../utils/ai';
 
 export interface PageData {
   id: string;
@@ -455,7 +456,7 @@ export class ReceiptLogicService {
         const match = rotatedImage.match(/^data:(.*?);base64,(.*)$/);
         if (match) parts.push({ inlineData: { mimeType: match[1], data: match[2] } });
       }
-      const response = await ai.models.generateContent({
+      const response = await generateContentWithRetry(ai, {
         model: this.selectedModel(), contents: { parts }, config: { responseMimeType: 'application/json' }
       });
       if (response.usageMetadata) {

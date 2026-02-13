@@ -2,6 +2,7 @@ import { Injectable, signal, effect, inject } from "@angular/core";
 import { GoogleGenAI } from "@google/genai";
 import { Rule, Transaction, TaxType, normalizeForMatch } from "../types";
 import { normalizeDescription, escapeCsvCell } from "../utils/format";
+import { generateContentWithRetry } from '../utils/ai';
 import { SupabaseService } from "./supabase.service";
 import Encoding from "encoding-japanese";
 import { calculateTaxFromCategory } from '../utils/tax';
@@ -666,7 +667,7 @@ export class CreditCardLogicService {
         if (match)
           parts.push({ inlineData: { mimeType: match[1], data: match[2] } });
       }
-      const response = await ai.models.generateContent({
+      const response = await generateContentWithRetry(ai, {
         model: this.selectedModel(),
         contents: { parts },
         config: { responseMimeType: "application/json" },
