@@ -779,12 +779,22 @@ export class CreditCardLogicService {
       // Per-rule tax category override
       if (matchedRule?.taxCategory)
         expenseTaxCategory = matchedRule.taxCategory;
-      let taxAmount = '';
-      if (taxType === 'standard' && expenseTaxCategory.includes('10%')) {
-         taxAmount = Math.floor(Number(amount) * 0.1 / 1.1).toString();
-      } else if (taxType === 'standard' && expenseTaxCategory.includes('8%')) {
-         taxAmount = Math.floor(Number(amount) * 0.08 / 1.08).toString();
+      const absAmount = Math.abs(Number(amount));
+      let calculatedTax = 0;
+      let rate = 0;
+      
+      // Robust tax rate detection
+      if (expenseTaxCategory.match(/[1１]0[%％]/)) rate = 0.1;
+      else if (expenseTaxCategory.match(/[8８][%％]/)) rate = 0.08;
+
+      if (rate > 0 && taxType === 'standard') {
+        calculatedTax = Math.floor(absAmount * rate / (1 + rate));
       }
+
+      const taxStr = calculatedTax > 0 ? calculatedTax.toString() : '';
+      // Credit Card is always expense side tax
+      const debTaxAmt = taxStr;
+      const credTaxAmt = '';
 
       let rowData: string[];
       if (showSystem) {
@@ -798,13 +808,13 @@ export class CreditCardLogicService {
           "",
           expenseTaxCategory,
           amount,
-          taxAmount,
+          debTaxAmt,
           "未払金",
           card,
           "",
           "対象外",
           amount,
-          "",
+          credTaxAmt,
           note,
           "",
           "",

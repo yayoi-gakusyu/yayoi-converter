@@ -595,18 +595,29 @@ export class BankLogicService {
       const credAcc = isExpense ? '普通預金' : account;
       const credSub = isExpense ? bank : '';
       const credTax = isExpense ? '対象外' : incomeTaxCategory;
-      let taxAmount = '';
-      if (taxType === 'standard' && expenseTaxCategory.includes('10%')) {
-         taxAmount = Math.floor(Number(amount) * 0.1 / 1.1).toString();
-      } else if (taxType === 'standard' && expenseTaxCategory.includes('8%')) {
-         taxAmount = Math.floor(Number(amount) * 0.08 / 1.08).toString();
+      
+      const absAmount = Math.abs(tx.amount);
+      let calculatedTax = 0;
+      let rate = 0;
+      const targetTaxCat = isExpense ? expenseTaxCategory : incomeTaxCategory;
+
+      // Robust tax rate detection (handle 10%, １０％, etc.)
+      if (targetTaxCat.match(/[1１]0[%％]/)) rate = 0.1;
+      else if (targetTaxCat.match(/[8８][%％]/)) rate = 0.08;
+
+      if (rate > 0 && taxType === 'standard') {
+        calculatedTax = Math.floor(absAmount * rate / (1 + rate));
       }
+
+      const taxStr = calculatedTax > 0 ? calculatedTax.toString() : '';
+      const debTaxAmt = isExpense ? taxStr : '';
+      const credTaxAmt = !isExpense ? taxStr : '';
 
       let rowData: string[];
       if (showSystem) {
-        rowData = ['2000', '', '', tx.date, debAcc, debSub, '', debTax, amount, taxAmount, credAcc, credSub, '', credTax, amount, '', note, '', '', '0', '', '', '', '', 'no'];
+        rowData = ['2000', '', '', tx.date, debAcc, debSub, '', debTax, amount, debTaxAmt, credAcc, credSub, '', credTax, amount, credTaxAmt, note, '', '', '0', '', '', '', '', 'no'];
       } else {
-        rowData = [tx.date, debAcc, debSub, '', debTax, amount, taxAmount, credAcc, credSub, '', credTax, amount, '', note];
+        rowData = [tx.date, debAcc, debSub, '', debTax, amount, debTaxAmt, credAcc, credSub, '', credTax, amount, credTaxAmt, note];
       }
       rows.push(rowData.map(cell => `"${cell}"`).join(','));
     });
