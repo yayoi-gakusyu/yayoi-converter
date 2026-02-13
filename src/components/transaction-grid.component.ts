@@ -15,6 +15,9 @@ import { TAX_CATEGORIES_EXPENSE, TAX_CATEGORIES_INCOME, calculateTaxFromCategory
       <table class="w-full text-sm text-left text-slate-500 border-collapse">
         <thead class="text-xs text-slate-700 uppercase bg-slate-50 sticky top-0 z-10 shadow-sm">
           <tr>
+            <th class="px-3 py-3 w-10 border-b border-r border-slate-200 bg-slate-50 sticky left-0 z-20">
+               <input type="checkbox" (change)="toggleSelectAll($event)" class="rounded border-slate-300 focus:ring-blue-500">
+            </th>
             <th class="px-3 py-3 w-28 border-b border-r border-slate-200">日付</th>
             <th class="px-3 py-3 border-b border-r border-slate-200">摘要 / 店名</th>
             <th class="px-3 py-3 w-28 text-right border-b border-r border-slate-200">金額</th>
@@ -34,7 +37,13 @@ import { TAX_CATEGORIES_EXPENSE, TAX_CATEGORIES_INCOME, calculateTaxFromCategory
         </thead>
         <tbody>
           @for (tx of transactions; track $index) {
-            <tr class="bg-white border-b hover:bg-slate-50">
+            <tr class="bg-white border-b hover:bg-slate-50" [class.bg-blue-50]="isSelected($index)">
+               <!-- Checkbox -->
+               <td class="p-0 border-r border-slate-100 text-center relative sticky left-0 z-10 bg-inherit">
+                 <div class="h-full w-full flex items-center justify-center min-h-[36px]" (click)="toggleRow($index, $event)">
+                    <input type="checkbox" [checked]="isSelected($index)" class="rounded border-slate-300 focus:ring-blue-500 pointer-events-none">
+                 </div>
+               </td>
                   <!-- Date -->
               <td class="p-0 border-r border-slate-100 relative"
                   [class.bg-blue-50]="isFocused($index, 'date')"
@@ -70,6 +79,7 @@ import { TAX_CATEGORIES_EXPENSE, TAX_CATEGORIES_INCOME, calculateTaxFromCategory
                          (keydown.enter)="finishEditingAndMove($event, 1, 0)"
                          (keydown.tab)="finishEditingAndMove($event, 0, 1)"
                          (keydown.escape)="cancelEditing()"
+                         (keydown.f7)="convertToKatakana($event, $index, 'description')"
                          #editInput
                          class="w-full h-full p-2 border-0 focus:ring-2 focus:ring-blue-500 absolute inset-0">
                 } @else {
@@ -148,6 +158,7 @@ import { TAX_CATEGORIES_EXPENSE, TAX_CATEGORIES_INCOME, calculateTaxFromCategory
                          (keydown.enter)="finishEditingAndMove($event, 1, 0)"
                          (keydown.tab)="finishEditingAndMove($event, 0, 1)"
                          (keydown.escape)="cancelEditing()"
+                         (keydown.f7)="convertToKatakana($event, $index, 'note')"
                          #editInput
                          class="w-full h-full p-2 border-0 focus:ring-2 focus:ring-blue-500 absolute inset-0 text-xs">
                   } @else {
@@ -241,6 +252,45 @@ import { TAX_CATEGORIES_EXPENSE, TAX_CATEGORIES_INCOME, calculateTaxFromCategory
           }
         </tbody>
       </table>
+
+      @if (selectedRows().size > 0) {
+       <div class="fixed bottom-6 right-6 bg-white shadow-2xl border border-slate-200 p-4 rounded-xl z-50 flex flex-col gap-3 animate-fade-in-up w-80">
+           <div class="flex justify-between items-center border-b border-slate-100 pb-2">
+             <span class="font-bold text-slate-700">⚡ 一括編集 ({{ selectedRows().size }}件)</span>
+             <button (click)="selectedRows().set(new Set())" class="text-xs text-slate-400 hover:text-slate-600">解除</button>
+           </div>
+           
+           <div class="space-y-2">
+             <select #batchAccount (change)="applyBatchAccount(batchAccount.value); batchAccount.value=''" 
+                     class="w-full p-2 border border-slate-300 rounded text-sm bg-white text-slate-700 cursor-pointer hover:border-blue-400 transition-colors">
+               <option value="">勘定科目を一括変更...</option>
+               <optgroup label="経費科目">
+                 @for (opt of expenseOptions; track opt) { <option [value]="opt">{{ opt }}</option> }
+               </optgroup>
+               @if (incomeOptions.length > 0) {
+                 <optgroup label="収入科目">
+                   @for (opt of incomeOptions; track opt) { <option [value]="opt">{{ opt }}</option> }
+                 </optgroup>
+               }
+             </select>
+
+             <select #batchTax (change)="applyBatchTaxCategory(batchTax.value); batchTax.value=''" 
+                     class="w-full p-2 border border-slate-300 rounded text-sm bg-white text-slate-700 cursor-pointer hover:border-blue-400 transition-colors">
+               <option value="">税区分を一括変更...</option>
+               <optgroup label="経費 (課税/免税)">
+                  @for (opt of taxOptionsExpense; track opt) { <option [value]="opt">{{ opt }}</option> }
+               </optgroup>
+               <optgroup label="売上 (課税/免税)">
+                  @for (opt of taxOptionsIncome; track opt) { <option [value]="opt">{{ opt }}</option> }
+               </optgroup>
+             </select>
+           </div>
+           
+           <div class="text-[10px] text-slate-400 text-center">
+             Ctrl+クリックで複数選択 / Shift+クリックで範囲選択
+           </div>
+       </div>
+      }
     </div>
   `
 })
@@ -250,6 +300,9 @@ export class TransactionGridComponent {
   @Input() hasInvoiceNumber = false;
   @Input() expenseOptions: string[] = [];
   @Input() incomeOptions: string[] = [];
+
+  taxOptionsExpense = TAX_CATEGORIES_EXPENSE;
+  taxOptionsIncome = TAX_CATEGORIES_INCOME;
 
   @Output() update = new EventEmitter<{ index: number, field: string, value: any }>();
   @Output() delete = new EventEmitter<number>();
@@ -376,7 +429,10 @@ export class TransactionGridComponent {
 
     if (row === null || col === null) return;
 
-    if (e.key === 'ArrowDown') {
+    if (e.code === 'Space') {
+       e.preventDefault();
+       this.toggleRow(row, null);
+    } else if (e.key === 'ArrowDown') {
       e.preventDefault();
       this.moveFocus(1, 0);
     } else if (e.key === 'ArrowUp') {
@@ -410,6 +466,81 @@ export class TransactionGridComponent {
            this.moveFocus(1, 0);
        }
     }
+  }
+
+  // Batch Edit
+  selectedRows = signal<Set<number>>(new Set());
+  lastSelectedRow = -1;
+
+  toggleRow(index: number, event: MouseEvent | null) {
+      const current = new Set(this.selectedRows());
+      
+      if (event && event.shiftKey && this.lastSelectedRow !== -1) {
+          const start = Math.min(this.lastSelectedRow, index);
+          const end = Math.max(this.lastSelectedRow, index);
+          for (let i = start; i <= end; i++) {
+              current.add(i);
+          }
+      } else {
+          if (current.has(index)) {
+              current.delete(index);
+          } else {
+              current.add(index);
+          }
+          this.lastSelectedRow = index;
+      }
+      this.selectedRows.set(current);
+  }
+
+  toggleSelectAll(event: Event) {
+      const checked = (event.target as HTMLInputElement).checked;
+      if (checked) {
+          const all = new Set<number>();
+          this.transactions.forEach((_, i) => all.add(i));
+          this.selectedRows.set(all);
+      } else {
+          this.selectedRows.set(new Set());
+      }
+  }
+
+  isSelected(index: number) {
+      return this.selectedRows().has(index);
+  }
+
+  applyBatchAccount(account: string) {
+      if (!account) return;
+      const indices = Array.from(this.selectedRows());
+      indices.forEach(idx => {
+          this.updateValue(idx, 'account', account);
+      });
+      this.selectedRows.set(new Set());
+  }
+
+    convertToKatakana(event: Event, index: number, field: string) {
+      if (this.isEditingState()) {
+          const input = event.target as HTMLInputElement;
+          const val = input.value;
+          const kata = val.replace(/[\u3041-\u3096]/g, (match) => {
+              return String.fromCharCode(match.charCodeAt(0) + 0x60);
+          });
+          
+          if (val !== kata) {
+              // Update UI and Model
+              input.value = kata;
+              this.updateValue(index, field, kata);
+              event.preventDefault(); // Prevent default F7 behavior (caret browsing etc)
+          }
+      }
+  }
+
+
+  applyBatchTaxCategory(category: string) {
+      if (!category) return;
+      const indices = Array.from(this.selectedRows());
+      indices.forEach(idx => {
+          this.updateTaxCategory(idx, category);
+      });
+      this.selectedRows.set(new Set());
   }
 
   moveFocus(rowDelta: number, colDelta: number) {

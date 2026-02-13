@@ -1,6 +1,7 @@
 import { Injectable, signal, effect, inject } from "@angular/core";
 import { GoogleGenAI } from "@google/genai";
 import { Rule, Transaction, TaxType, normalizeForMatch } from "../types";
+import { normalizeDescription, escapeCsvCell } from "../utils/format";
 import { SupabaseService } from "./supabase.service";
 import Encoding from "encoding-japanese";
 import { calculateTaxFromCategory } from '../utils/tax';
@@ -410,7 +411,7 @@ export class CreditCardLogicService {
     const newPages: PageData[] = [];
     for (let i = 1; i <= totalPages; i++) {
       const page = await pdf.getPage(i);
-      const scale = 2.0;
+      const scale = 1.5;
       const viewport = page.getViewport({ scale });
       const canvas = document.createElement("canvas");
       const context = canvas.getContext("2d");
@@ -422,7 +423,7 @@ export class CreditCardLogicService {
       await page.render({ canvasContext: context, viewport }).promise;
       newPages.push({
         id: crypto.randomUUID(),
-        image: canvas.toDataURL("image/jpeg", 0.85),
+        image: canvas.toDataURL("image/jpeg", 0.6),
         rotation: 0,
         pageNumber: i,
       });
@@ -618,7 +619,7 @@ export class CreditCardLogicService {
         ctx.translate(canvas.width / 2, canvas.height / 2);
         ctx.rotate((page.rotation * Math.PI) / 180);
         ctx.drawImage(img, -img.width / 2, -img.height / 2);
-        resolve(canvas.toDataURL("image/jpeg", 0.9));
+        resolve(canvas.toDataURL("image/jpeg", 0.6));
       };
       img.onerror = reject;
       img.src = page.image;
@@ -797,7 +798,8 @@ export class CreditCardLogicService {
       const matchedRule = this.findMatchingRule(tx.description);
       let account =
         tx.account || matchedRule?.account || this.findAccount(tx.description);
-      const note = tx.note ? `${tx.description} ${tx.note}` : tx.description;
+      const rawNote = tx.note ? `${tx.description} ${tx.note}` : tx.description;
+      const note = normalizeDescription(rawNote);
       const amount = Math.abs(tx.amount).toString();
       let expenseTaxCategory = "課対仕入10%";
       if (taxType === "exempt" || taxType === "simplified")
@@ -874,7 +876,7 @@ export class CreditCardLogicService {
           note,
         ];
       }
-      rows.push(rowData.map((cell) => `"${cell}"`).join(","));
+      rows.push(rowData.map((cell) => `"${escapeCsvCell(cell)}"`).join(","));
     });
     this.csvData.set(rows.join("\r\n"));
   }

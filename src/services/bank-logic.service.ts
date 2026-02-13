@@ -5,6 +5,7 @@ import { Rule, Transaction, TaxType, normalizeForMatch } from '../types';
 import { SupabaseService } from './supabase.service';
 import Encoding from 'encoding-japanese';
 import { calculateTaxFromCategory } from '../utils/tax';
+import { normalizeDescription, escapeCsvCell } from '../utils/format';
 
 export interface PageData {
   id: string;
@@ -297,7 +298,7 @@ export class BankLogicService {
     const newPages: PageData[] = [];
     for (let i = 1; i <= totalPages; i++) {
       const page = await pdf.getPage(i);
-      const scale = 2.0;
+      const scale = 1.5;
       const viewport = page.getViewport({ scale });
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d');
@@ -305,7 +306,7 @@ export class BankLogicService {
       canvas.width = viewport.width;
       if (!context) throw new Error('Canvas context作成エラー');
       await page.render({ canvasContext: context, viewport }).promise;
-      newPages.push({ id: crypto.randomUUID(), image: canvas.toDataURL('image/jpeg', 0.85), rotation: 0, pageNumber: i });
+      newPages.push({ id: crypto.randomUUID(), image: canvas.toDataURL('image/jpeg', 0.6), rotation: 0, pageNumber: i });
     }
     this.pages.set(newPages);
     this.isLoading.set(false);
@@ -468,7 +469,7 @@ export class BankLogicService {
         ctx.translate(canvas.width / 2, canvas.height / 2);
         ctx.rotate((page.rotation * Math.PI) / 180);
         ctx.drawImage(img, -img.width / 2, -img.height / 2);
-        resolve(canvas.toDataURL('image/jpeg', 0.9));
+        resolve(canvas.toDataURL('image/jpeg', 0.6));
       };
       img.onerror = reject;
       img.src = page.image;
@@ -605,12 +606,12 @@ export class BankLogicService {
       // Priority: tx.account (user edit / AI prediction) > rule match > default
       const matchedRule = this.findMatchingRule(tx.description, isExpense);
       let account = tx.account || matchedRule?.account || this.findAccount(tx.description, isExpense);
-      const note = tx.note ? `${tx.description} ${tx.note}` : tx.description;
+      const rawNote = tx.note ? `${tx.description} ${tx.note}` : tx.description;
+      const note = normalizeDescription(rawNote);
       const amount = tx.amount.toString();
       
       let expenseTaxCategory = '課対仕入10%';
       let incomeTaxCategory = '課税売上10%';
-      
       if (taxType === 'exempt') { expenseTaxCategory = '対象外'; incomeTaxCategory = '対象外'; }
       else if (taxType === 'simplified') { expenseTaxCategory = '対象外'; incomeTaxCategory = simplifiedIncomeTax; }
       
@@ -646,7 +647,7 @@ export class BankLogicService {
             calculatedTax = Math.floor(absAmount * rate / (1 + rate));
           }
       }
-
+      
       const taxStr = calculatedTax > 0 ? calculatedTax.toString() : '';
       const debTaxAmt = isExpense ? taxStr : '';
       const credTaxAmt = !isExpense ? taxStr : '';
@@ -657,7 +658,7 @@ export class BankLogicService {
       } else {
         rowData = [tx.date, debAcc, debSub, '', debTax, amount, debTaxAmt, credAcc, credSub, '', credTax, amount, credTaxAmt, note];
       }
-      rows.push(rowData.map(cell => `"${cell}"`).join(','));
+      rows.push(rowData.map(cell => `"${escapeCsvCell(cell)}"`).join(','));
     });
     this.csvData.set(rows.join('\r\n'));
   }

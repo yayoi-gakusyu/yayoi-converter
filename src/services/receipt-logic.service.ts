@@ -5,6 +5,7 @@ import { Rule, Transaction, TaxType, normalizeForMatch } from '../types';
 import { SupabaseService } from './supabase.service';
 import Encoding from 'encoding-japanese';
 import { calculateTaxFromCategory } from '../utils/tax';
+import { normalizeDescription, escapeCsvCell } from '../utils/format';
 
 export interface PageData {
   id: string;
@@ -269,7 +270,7 @@ export class ReceiptLogicService {
     const newPages: PageData[] = [];
     for (let i = 1; i <= totalPages; i++) {
       const page = await pdf.getPage(i);
-      const scale = 2.0;
+      const scale = 1.5;
       const viewport = page.getViewport({ scale });
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d');
@@ -279,7 +280,7 @@ export class ReceiptLogicService {
       context.fillStyle = '#ffffff';
       context.fillRect(0, 0, canvas.width, canvas.height);
       await page.render({ canvasContext: context, viewport }).promise;
-      newPages.push({ id: crypto.randomUUID(), image: canvas.toDataURL('image/jpeg', 0.85), rotation: 0, pageNumber: i });
+      newPages.push({ id: crypto.randomUUID(), image: canvas.toDataURL('image/jpeg', 0.6), rotation: 0, pageNumber: i });
     }
     this.pages.set(newPages);
     this.isLoading.set(false);
@@ -420,7 +421,7 @@ export class ReceiptLogicService {
         ctx.translate(canvas.width / 2, canvas.height / 2);
         ctx.rotate((page.rotation * Math.PI) / 180);
         ctx.drawImage(img, -img.width / 2, -img.height / 2);
-        resolve(canvas.toDataURL('image/jpeg', 0.9));
+        resolve(canvas.toDataURL('image/jpeg', 0.6));
       };
       img.onerror = reject;
       img.src = page.image;
@@ -539,7 +540,8 @@ export class ReceiptLogicService {
       const invoicePart = tx.invoiceNumber ? tx.invoiceNumber : 'インボイスなし';
       const shopPart = tx.description || '';
       const contentPart = tx.note || '';
-      const note = contentPart ? `${invoicePart}_${shopPart}_${contentPart}` : `${invoicePart}_${shopPart}`;
+      const rawNote = contentPart ? `${invoicePart}_${shopPart}_${contentPart}` : `${invoicePart}_${shopPart}`;
+      const note = normalizeDescription(rawNote);
       const amount = Math.abs(tx.amount).toString();
       let expenseTaxCategory = '課対仕入10%';
       if (taxType === 'exempt' || taxType === 'simplified') expenseTaxCategory = '対象外';
@@ -573,7 +575,7 @@ export class ReceiptLogicService {
       } else {
         rowData = [tx.date, account, '', '', expenseTaxCategory, amount, debTaxAmt, '現金', '', '', '対象外', amount, credTaxAmt, note];
       }
-      rows.push(rowData.map(cell => `"${cell}"`).join(','));
+      rows.push(rowData.map(cell => `"${escapeCsvCell(cell)}"`).join(','));
     });
     this.csvData.set(rows.join('\r\n'));
   }

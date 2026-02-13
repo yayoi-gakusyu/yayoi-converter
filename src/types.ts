@@ -19,6 +19,7 @@ export interface Transaction {
 export interface Rule {
   keyword: string;
   account: string;
+  sub_account?: string;
   taxCategory?: string;
   transaction_type?: 'expense' | 'income';
   id?: string;

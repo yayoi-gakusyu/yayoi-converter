@@ -1218,7 +1218,24 @@
 
       <!-- Matching Settings Panel -->
       @if (activeTab() === "matching") {
+        <div class="mb-6 bg-purple-50 border border-purple-200 rounded-xl p-4 flex items-center justify-between">
+           <div>
+             <h3 class="font-bold text-purple-800 flex items-center gap-2">🤖 AI学習ルール (全体共通)</h3>
+             <p class="text-xs text-purple-600 mt-1">
+               仕訳日記帳から学習したルールや、全体で適用されるルールを管理します。
+             </p>
+           </div>
+           <button (click)="showRuleManager.set(true)"
+                   class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm transition-colors flex items-center gap-2">
+             <span>⚙️</span> 管理画面を開く
+           </button>
+        </div>
         <app-matching-settings></app-matching-settings>
+      }
+
+      <!-- Rule Manager Modal -->
+      @if (showRuleManager()) {
+        <app-rule-manager (close)="showRuleManager.set(false)"></app-rule-manager>
       }
 
       <!-- Master Settings Panel -->

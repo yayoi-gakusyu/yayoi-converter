@@ -9,13 +9,14 @@ import { MatchingSettingsComponent } from './components/matching-settings.compon
 import { MasterSettingsComponent } from './components/master-settings.component';
 import { TransactionGridComponent } from './components/transaction-grid.component';
 import { ImageViewerComponent } from './components/image-viewer.component';
+import { RuleManagerComponent } from './components/rule-manager.component';
 
 import { HostListener } from '@angular/core';
 import { HistoryService } from './services/history.service';
 
 @Component({
   selector: 'app-root',
-  imports: [CommonModule, FormsModule, ModeSwitcherComponent, MatchingSettingsComponent, MasterSettingsComponent, TransactionGridComponent, ImageViewerComponent],
+  imports: [CommonModule, FormsModule, ModeSwitcherComponent, MatchingSettingsComponent, MasterSettingsComponent, TransactionGridComponent, ImageViewerComponent, RuleManagerComponent],
   templateUrl: './app.component.html'
 })
 export class AppComponent {
@@ -23,6 +24,7 @@ export class AppComponent {
   journalLearning = inject(JournalLearningService);
   historyService = inject(HistoryService);
   activeTab = signal<'guide' | 'main' | 'result' | 'matching' | 'master'>('guide');
+  showRuleManager = signal(false);
 
   get appLogic() { return this.modeService.activeService(); }
   get cfg() { return this.modeService.modeConfig(); }

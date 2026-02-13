@@ -3,12 +3,7 @@ import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabas
 import { environment } from '../environments/environment';
 import { Rule } from '../types';
 
-export interface LearningRule {
-  keyword: string;
-  account: string;
-  sub_account?: string;
-  tax_type?: string;
-}
+
 
 @Injectable({
   providedIn: 'root'
