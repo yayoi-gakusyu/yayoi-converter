@@ -11,6 +11,7 @@ export interface Transaction {
   id?: string;
   source_type?: 'receipt' | 'bank' | 'credit_card';
   source_name?: string; // Bank name or Card name
+  taxAmount?: number;
 }
 
 export interface Rule {

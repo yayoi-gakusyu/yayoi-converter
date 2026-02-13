@@ -23,6 +23,7 @@ import { Transaction } from '../types';
               <th class="px-3 py-3 w-40 border-b border-r border-slate-200">インボイス番号</th>
               <th class="px-3 py-3 border-b border-r border-slate-200">品目</th>
             }
+            <th class="px-3 py-3 w-28 text-right border-b border-r border-slate-200">消費税</th>
             <th class="px-3 py-3 w-48 border-b border-r border-slate-200">勘定科目</th>
             <th class="px-3 py-3 w-10 border-b border-slate-200"></th>
           </tr>
@@ -153,6 +154,31 @@ import { Transaction } from '../types';
                 </td>
               }
 
+                  }
+              }
+
+              <!-- Tax Amount -->
+              <td class="p-0 border-r border-slate-100 relative"
+                  [class.bg-blue-50]="isFocused($index, 'taxAmount')"
+                  (click)="focusCell($index, 'taxAmount')"
+                  (dblclick)="startEditing()">
+                @if (isEditing($index, 'taxAmount')) {
+                   <input type="number"
+                         [ngModel]="tx.taxAmount"
+                         (ngModelChange)="updateValue($index, 'taxAmount', $event)"
+                         (blur)="finishEditing()"
+                         (keydown.enter)="finishEditingAndMove($event, 1, 0)"
+                         (keydown.tab)="finishEditingAndMove($event, 0, 1)"
+                         (keydown.escape)="cancelEditing()"
+                         #editInput
+                         class="w-full h-full p-2 border-0 focus:ring-2 focus:ring-blue-500 absolute inset-0 text-right font-mono text-xs">
+                } @else {
+                  <div class="p-2 text-right font-mono text-xs cursor-cell h-full min-h-[36px] text-slate-500">
+                    {{ tx.taxAmount | number }}
+                  </div>
+                }
+              </td>
+
               <!-- Account (Select) -->
               <td class="p-0 border-r border-slate-100 relative"
                   [class.bg-blue-50]="isFocused($index, 'account')"
@@ -208,7 +234,7 @@ export class TransactionGridComponent {
   get columns() {
     const cols = ['date', 'description', 'amount'];
     if (this.hasInvoiceNumber) cols.push('invoiceNumber', 'note');
-    cols.push('account');
+    cols.push('taxAmount', 'account');
     return cols;
   }
 

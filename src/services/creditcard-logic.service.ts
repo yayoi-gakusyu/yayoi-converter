@@ -3,6 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 import { Rule, Transaction, TaxType, normalizeForMatch } from "../types";
 import { SupabaseService } from "./supabase.service";
 import Encoding from "encoding-japanese";
+import { calculateTaxFromCategory } from '../utils/tax';
 
 export interface PageData {
   id: string;
@@ -691,14 +692,28 @@ export class CreditCardLogicService {
         // Priority: rule setting > AI prediction > default
         const ruleAccount = this.findAccount(desc);
         const aiAccount = tx.account || "";
-        const account =
-          ruleAccount !== "雑費" ? ruleAccount : aiAccount || "雑費";
-        return {
-          ...tx,
-          description: desc,
-          account,
-          source_type: "credit_card" as const,
-          source_name: card,
+        const account = (ruleAccount !== '雑費') ? ruleAccount : (aiAccount || '雑費');
+        
+        // Tax Calculation
+        const taxType = this.taxType(); // Capture signal value
+        const matchedRule = this.findMatchingRule(desc);
+        
+        let expenseTaxCategory = '課対仕入10%';
+        if (taxType === 'exempt' || taxType === 'simplified') expenseTaxCategory = '対象外';
+        if (matchedRule?.taxCategory) expenseTaxCategory = matchedRule.taxCategory;
+
+        const taxAmount = calculateTaxFromCategory(tx.amount, expenseTaxCategory, taxType);
+
+        return { 
+            ...tx,
+            date: tx.date || '', 
+            description: desc, 
+            amount: Number(tx.amount) || 0, 
+            note: tx.note || '', 
+            account, 
+            source_type: 'credit_card' as const,
+            source_name: card,
+            taxAmount
         };
       });
       this.processedTransactions.set(txs);
@@ -781,14 +796,19 @@ export class CreditCardLogicService {
         expenseTaxCategory = matchedRule.taxCategory;
       const absAmount = Math.abs(Number(amount));
       let calculatedTax = 0;
-      let rate = 0;
       
-      // Robust tax rate detection
-      if (expenseTaxCategory.match(/[1１]0[%％]/)) rate = 0.1;
-      else if (expenseTaxCategory.match(/[8８][%％]/)) rate = 0.08;
+      // Use stored taxAmount if available
+      if (tx.taxAmount !== undefined) {
+          calculatedTax = tx.taxAmount;
+      } else {
+          let rate = 0;
+          // Robust tax rate detection
+          if (expenseTaxCategory.match(/[1１]0[%％]/)) rate = 0.1;
+          else if (expenseTaxCategory.match(/[8８][%％]/)) rate = 0.08;
 
-      if (rate > 0 && taxType === 'standard') {
-        calculatedTax = Math.floor(absAmount * rate / (1 + rate));
+          if (rate > 0 && taxType === 'standard') {
+            calculatedTax = Math.floor(absAmount * rate / (1 + rate));
+          }
       }
 
       const taxStr = calculatedTax > 0 ? calculatedTax.toString() : '';

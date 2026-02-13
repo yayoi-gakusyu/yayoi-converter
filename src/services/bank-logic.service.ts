@@ -4,6 +4,7 @@ import { GoogleGenAI } from '@google/genai';
 import { Rule, Transaction, TaxType, normalizeForMatch } from '../types';
 import { SupabaseService } from './supabase.service';
 import Encoding from 'encoding-japanese';
+import { calculateTaxFromCategory } from '../utils/tax';
 
 export interface PageData {
   id: string;
@@ -520,6 +521,10 @@ export class BankLogicService {
       jsonStr = jsonStr.replace(/^```json/i, '').replace(/^```/, '').replace(/```$/, '');
       const data = JSON.parse(jsonStr);
       if (!data.transactions || !Array.isArray(data.transactions)) throw new Error('期待されたJSON形式ではありませんでした');
+      
+      const taxType = this.taxType(); // Capture signal value
+      const simplifiedIncomeTax = this.getSimplifiedTaxCategoryString(); // Capture value
+
       const txs = data.transactions.map((tx: any) => {
         const isExpense = tx.type === 'expense';
         const desc = tx.description || '';
@@ -528,12 +533,32 @@ export class BankLogicService {
         const ruleAccount = this.findAccount(desc, isExpense);
         const aiAccount = tx.account || '';
         const account = (ruleAccount !== defaultAccount) ? ruleAccount : (aiAccount || defaultAccount);
-        return { 
-            ...tx, 
-            description: desc, 
-            account,
-            source_type: 'bank' as const,
-            source_name: bank
+        
+        // 6. Tax Calculation for UI
+        let taxAmount = 0;
+        const matchedRule = this.findMatchingRule(desc, isExpense);
+        
+        // Determine tax category for calculation
+        let targetTaxCat = '対象外';
+        if (tx.type === 'expense') {
+            targetTaxCat = matchedRule?.taxCategory || '課対仕入10%';
+            if (taxType === 'exempt') targetTaxCat = '対象外';
+            else if (taxType === 'simplified') targetTaxCat = '対象外';
+        } else {
+            targetTaxCat = matchedRule?.taxCategory || '課税売上10%';
+            if (taxType === 'exempt') targetTaxCat = '対象外';
+            else if (taxType === 'simplified') targetTaxCat = simplifiedIncomeTax;
+        }
+
+        taxAmount = calculateTaxFromCategory(tx.amount, targetTaxCat, taxType);
+
+        return {
+          ...tx,
+          description: desc, 
+          account,
+          source_type: 'bank' as const,
+          source_name: bank,
+          taxAmount
         };
       });
       this.processedTransactions.set(txs);
@@ -598,15 +623,19 @@ export class BankLogicService {
       
       const absAmount = Math.abs(tx.amount);
       let calculatedTax = 0;
-      let rate = 0;
-      const targetTaxCat = isExpense ? expenseTaxCategory : incomeTaxCategory;
+      
+      // Use stored taxAmount if available, otherwise calculate
+      if (tx.taxAmount !== undefined) {
+          calculatedTax = tx.taxAmount;
+      } else {
+          let rate = 0;
+          const targetTaxCat = isExpense ? expenseTaxCategory : incomeTaxCategory;
+          if (targetTaxCat.match(/[1１]0[%％]/)) rate = 0.1;
+          else if (targetTaxCat.match(/[8８][%％]/)) rate = 0.08;
 
-      // Robust tax rate detection (handle 10%, １０％, etc.)
-      if (targetTaxCat.match(/[1１]0[%％]/)) rate = 0.1;
-      else if (targetTaxCat.match(/[8８][%％]/)) rate = 0.08;
-
-      if (rate > 0 && taxType === 'standard') {
-        calculatedTax = Math.floor(absAmount * rate / (1 + rate));
+          if (rate > 0 && taxType === 'standard') {
+            calculatedTax = Math.floor(absAmount * rate / (1 + rate));
+          }
       }
 
       const taxStr = calculatedTax > 0 ? calculatedTax.toString() : '';
