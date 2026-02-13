@@ -697,12 +697,22 @@ export class CreditCardLogicService {
         // Tax Calculation
         const taxType = this.taxType(); // Capture signal value
         const matchedRule = this.findMatchingRule(desc);
-        
-        let expenseTaxCategory = '課対仕入10%';
-        if (taxType === 'exempt' || taxType === 'simplified') expenseTaxCategory = '対象外';
-        if (matchedRule?.taxCategory) expenseTaxCategory = matchedRule.taxCategory;
-
-        const taxAmount = calculateTaxFromCategory(tx.amount, expenseTaxCategory, taxType);
+      let expenseTaxCategory = '課対仕入10%';
+      if (taxType === 'exempt' || taxType === 'simplified') expenseTaxCategory = '対象外';
+      
+      if (tx.taxCategory) {
+          expenseTaxCategory = tx.taxCategory;
+      } else if (matchedRule?.taxCategory) {
+          expenseTaxCategory = matchedRule.taxCategory;
+      }
+      
+      let taxAmount = 0;
+      if (tx.taxAmount !== undefined) {
+          taxAmount = tx.taxAmount;
+      } else {
+          if (expenseTaxCategory === '課対仕入10%') taxAmount = Math.floor(tx.amount * 0.1 / 1.1);
+          else if (expenseTaxCategory.includes('8%')) taxAmount = Math.floor(tx.amount * 0.08 / 1.08);
+      }
 
         return { 
             ...tx,
@@ -713,7 +723,8 @@ export class CreditCardLogicService {
             account, 
             source_type: 'credit_card' as const,
             source_name: card,
-            taxAmount
+            taxAmount,
+            taxCategory: expenseTaxCategory
         };
       });
       this.processedTransactions.set(txs);

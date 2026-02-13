@@ -478,19 +478,33 @@ export class ReceiptLogicService {
         const taxType = this.taxType();
         const matchedRule = this.findMatchingRule(desc);
         
-        // Determine tax category
-        let expenseTaxCategory = '課対仕入10%';
-        if (taxType === 'exempt' || taxType === 'simplified') expenseTaxCategory = '対象外';
-        if (matchedRule?.taxCategory) expenseTaxCategory = matchedRule.taxCategory;
-
-        const taxAmount = calculateTaxFromCategory(tx.amount, expenseTaxCategory, taxType);
+      let expenseTaxCategory = '課対仕入10%';
+      
+      if (taxType === 'exempt' || taxType === 'simplified') expenseTaxCategory = '対象外';
+      
+      // Override with stored category or rule
+      if (tx.taxCategory) {
+          expenseTaxCategory = tx.taxCategory;
+      } else if (matchedRule?.taxCategory) {
+          expenseTaxCategory = matchedRule.taxCategory;
+      }
+      
+      let calculatedTax = 0;
+      if (tx.taxAmount !== undefined) {
+         calculatedTax = tx.taxAmount;
+      } else {
+         // Fallback calculation
+         if (expenseTaxCategory === '課対仕入10%') calculatedTax = Math.floor(tx.amount * 0.1 / 1.1);
+         else if (expenseTaxCategory.includes('8%')) calculatedTax = Math.floor(tx.amount * 0.08 / 1.08);
+      }
 
         return {
           ...tx,
           description: desc, // AI normalized
           account,
           source_type: 'receipt' as const,
-          taxAmount
+          taxAmount: calculatedTax,
+          taxCategory: expenseTaxCategory
         };
       });
       

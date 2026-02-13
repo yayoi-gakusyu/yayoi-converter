@@ -558,7 +558,8 @@ export class BankLogicService {
           account,
           source_type: 'bank' as const,
           source_name: bank,
-          taxAmount
+          taxAmount,
+          taxCategory: targetTaxCat
         };
       });
       this.processedTransactions.set(txs);
@@ -598,6 +599,7 @@ export class BankLogicService {
     const rows = [headers.map(h => `"${h}"`).join(',')];
     const taxType = this.taxType();
     const simplifiedIncomeTax = taxType === 'simplified' ? this.getSimplifiedTaxCategoryString() : '対象外';
+
     transactions.forEach(tx => {
       const isExpense = tx.type === 'expense';
       // Priority: tx.account (user edit / AI prediction) > rule match > default
@@ -605,15 +607,22 @@ export class BankLogicService {
       let account = tx.account || matchedRule?.account || this.findAccount(tx.description, isExpense);
       const note = tx.note ? `${tx.description} ${tx.note}` : tx.description;
       const amount = tx.amount.toString();
+      
       let expenseTaxCategory = '課対仕入10%';
       let incomeTaxCategory = '課税売上10%';
+      
       if (taxType === 'exempt') { expenseTaxCategory = '対象外'; incomeTaxCategory = '対象外'; }
       else if (taxType === 'simplified') { expenseTaxCategory = '対象外'; incomeTaxCategory = simplifiedIncomeTax; }
-      // Per-rule tax category override
-      if (matchedRule?.taxCategory) {
-        if (isExpense) expenseTaxCategory = matchedRule.taxCategory;
-        else incomeTaxCategory = matchedRule.taxCategory;
+      
+      // Override with stored category (User edit) or Rule
+      if (tx.taxCategory) {
+          if (isExpense) expenseTaxCategory = tx.taxCategory;
+          else incomeTaxCategory = tx.taxCategory;
+      } else if (matchedRule?.taxCategory) {
+          if (isExpense) expenseTaxCategory = matchedRule.taxCategory;
+          else incomeTaxCategory = matchedRule.taxCategory;
       }
+
       const debAcc = isExpense ? account : '普通預金';
       const debSub = isExpense ? '' : bank;
       const debTax = isExpense ? expenseTaxCategory : '対象外';

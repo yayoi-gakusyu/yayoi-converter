@@ -2,8 +2,10 @@ import { Component, Input, Output, EventEmitter, signal, computed, effect } from
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Transaction } from '../types';
+import { TAX_CATEGORIES_EXPENSE, TAX_CATEGORIES_INCOME, calculateTaxFromCategory } from '../utils/tax';
 
 @Component({
+// ... (selector and template)
   selector: 'app-transaction-grid',
   imports: [CommonModule, FormsModule],
   template: `
@@ -22,7 +24,9 @@ import { Transaction } from '../types';
             @if (hasInvoiceNumber) {
               <th class="px-3 py-3 w-40 border-b border-r border-slate-200">インボイス番号</th>
               <th class="px-3 py-3 border-b border-r border-slate-200">品目</th>
+              <th class="px-3 py-3 border-b border-r border-slate-200">品目</th>
             }
+            <th class="px-3 py-3 w-32 border-b border-r border-slate-200">税区分</th>
             <th class="px-3 py-3 w-28 text-right border-b border-r border-slate-200">消費税</th>
             <th class="px-3 py-3 w-48 border-b border-r border-slate-200">勘定科目</th>
             <th class="px-3 py-3 w-10 border-b border-slate-200"></th>
@@ -154,6 +158,32 @@ import { Transaction } from '../types';
                 </td>
               }
 
+
+
+              <!-- Tax Category -->
+              <td class="p-0 border-r border-slate-100 relative"
+                  [class.bg-blue-50]="isFocused($index, 'taxCategory')"
+                  (click)="focusCell($index, 'taxCategory')"
+                  (dblclick)="startEditing()">
+                 @if (isEditing($index, 'taxCategory')) {
+                    <select [ngModel]="tx.taxCategory"
+                            (ngModelChange)="updateTaxCategory($index, $event); finishEditing()"
+                            (blur)="finishEditing()"
+                            (keydown.enter)="finishEditingAndMove($event, 1, 0)"
+                            (keydown.tab)="finishEditingAndMove($event, 0, 1)"
+                            (keydown.escape)="cancelEditing()"
+                             #editInput
+                            class="w-full h-full p-2 border-0 focus:ring-2 focus:ring-blue-500 absolute inset-0 text-xs text-center">
+                       @for (opt of getTaxOptions(tx); track opt) {
+                         <option [value]="opt">{{ opt }}</option>
+                       }
+                    </select>
+                 } @else {
+                    <div class="p-2 text-xs text-center cursor-cell h-full min-h-[36px] text-slate-600">
+                       {{ tx.taxCategory || '-' }}
+                     </div>
+                 }
+              </td>
 
               <!-- Tax Amount -->
               <td class="p-0 border-r border-slate-100 relative"
@@ -298,8 +328,31 @@ export class TransactionGridComponent {
       this.moveFocus(rowDelta, colDelta);
   }
 
+  getTaxOptions(tx: Transaction): string[] {
+      return (tx.type === 'income' && this.hasTypeColumn) ? TAX_CATEGORIES_INCOME : TAX_CATEGORIES_EXPENSE;
+  }
+
+  updateTaxCategory(index: number, val: string) {
+      this.updateValue(index, 'taxCategory', val);
+      // Recalculate tax amount
+      const tx = this.transactions[index];
+      const newTax = calculateTaxFromCategory(tx.amount, val, 'standard'); 
+      this.updateValue(index, 'taxAmount', newTax);
+  }
+
   updateValue(index: number, field: string, value: any) {
     this.update.emit({ index, field, value });
+    
+    // Optimistic update for UI responsiveness (and for immediate tax calc)
+    const tx: any = this.transactions[index];
+    tx[field] = value;
+
+    // Recalculate tax if amount changes and taxCategory exists
+    if (field === 'amount' && tx.taxCategory) {
+        const newTax = calculateTaxFromCategory(Number(value), tx.taxCategory, 'standard');
+        tx.taxAmount = newTax;
+        this.update.emit({ index, field: 'taxAmount', value: newTax });
+    }
   }
 
   removeRow(index: number) {
