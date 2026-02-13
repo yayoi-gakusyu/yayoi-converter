@@ -1,14 +1,7 @@
 import { Injectable } from '@angular/core';
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { environment } from '../environments/environment';
-
-export interface LearningRule {
-  keyword: string; // Primary Key
-  account: string;
-  sub_account?: string;
-  tax_type?: string;
-  updated_at?: string;
-}
+import { Rule } from '../types';
 
 @Injectable({
   providedIn: 'root'
@@ -21,45 +14,107 @@ export class SupabaseService {
     this.supabase = createClient(environment.supabase.url, environment.supabase.key);
   }
 
-  // Fetch all rules on startup
-  async getRules(): Promise<LearningRule[]> {
+
+  // Fetch transactions
+  async getTransactions(sourceType: string, sourceName?: string): Promise<any[]> {
+    let query = this.supabase
+      .from('transactions')
+      .select('*')
+      .eq('source_type', sourceType)
+      .order('date', { ascending: false });
+
+    if (sourceName) {
+      query = query.eq('source_name', sourceName);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Supabase fetch transactions error:', error);
+      return [];
+    }
+    return data || [];
+  }
+
+  // Save (Upsert) a transaction
+  async saveTransaction(transaction: any) {
+    // Remove undefined fields if any, though Supabase client handles them well usually
+    const { error } = await this.supabase
+      .from('transactions')
+      .upsert(transaction, { onConflict: 'id' });
+
+    if (error) {
+      console.error('Supabase save transaction error:', error);
+      throw error;
+    }
+  }
+
+  // Delete a transaction
+  async deleteTransaction(id: string) {
+    const { error } = await this.supabase
+      .from('transactions')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Supabase delete transaction error:', error);
+      throw error;
+    }
+  }
+
+  // Fetch all rules
+  async getRules(): Promise<Rule[]> {
     const { data, error } = await this.supabase
       .from('learning_rules')
       .select('*');
 
     if (error) {
-      console.error('Supabase fetch error:', error);
+      console.error('Supabase fetch rules error:', error);
       return [];
     }
-    return data as LearningRule[];
+    return data as Rule[];
   }
 
-  // Upsert a rule (Insert or Update)
-  async saveRule(rule: LearningRule) {
-    // Clean undefined fields to avoid issues if needed, but Supabase handles them usually.
-    // However, ensure updated_at is handled by DB default or sent.
-    // Let's rely on DB default for updated_at if we don't send it, but upsert might need it.
-    // Actually simpler to just send payload.
+  // Upsert a rule
+  async saveRule(rule: Rule) {
     const { error } = await this.supabase
       .from('learning_rules')
       .upsert(rule, { onConflict: 'keyword' });
 
     if (error) {
-      console.error('Supabase save error:', error);
+      console.error('Supabase save rule error:', error);
+    }
+  }
+
+  // Delete a rule
+  async deleteRule(id: string) {
+    const { error } = await this.supabase
+      .from('learning_rules')
+      .delete()
+      .eq('id', id);
+    
+    if (error) {
+       // Try deleting by keyword if id is missing? 
+       // Start with ID as primary check.
+       console.error('Supabase delete rule error:', error);
     }
   }
 
   // Realtime Subscription
-  subscribeToRules(callback: (payload: any) => void) {
+  subscribeToChanges(callback: () => void) {
     this.channel = this.supabase
-      .channel('public:learning_rules')
+      .channel('public:db_changes')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'learning_rules' },
-        (payload) => {
-          callback(payload);
-        }
+        { event: '*', schema: 'public', table: 'transactions' },
+        () => callback()
+      )
+      .on(
+         'postgres_changes',
+         { event: '*', schema: 'public', table: 'learning_rules' },
+         () => callback()
       )
       .subscribe();
   }
 }
+

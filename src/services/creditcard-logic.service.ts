@@ -1,6 +1,7 @@
-import { Injectable, signal, effect } from "@angular/core";
+import { Injectable, signal, effect, inject } from "@angular/core";
 import { GoogleGenAI } from "@google/genai";
 import { Rule, Transaction, TaxType, normalizeForMatch } from "../types";
+import { SupabaseService } from "./supabase.service";
 import Encoding from "encoding-japanese";
 
 export interface PageData {
@@ -12,40 +13,32 @@ export interface PageData {
 
 const DEFAULT_EXPENSE_RULES: Rule[] = [
   { keyword: "ETC", account: "旅費交通費" },
-  { keyword: "SUICA", account: "旅費交通費" },
-  { keyword: "PASMO", account: "旅費交通費" },
-  { keyword: "JR ", account: "旅費交通費" },
+  { keyword: "高速", account: "旅費交通費" },
+  { keyword: "モバイルSuica", account: "旅費交通費" },
   { keyword: "タクシー", account: "旅費交通費" },
-  { keyword: "ANA", account: "旅費交通費" },
-  { keyword: "JAL", account: "旅費交通費" },
-  { keyword: "Amazon", account: "消耗品費" },
-  { keyword: "アマゾン", account: "消耗品費" },
-  { keyword: "ヨドバシ", account: "消耗品費" },
-  { keyword: "ビックカメラ", account: "消耗品費" },
-  { keyword: "Google", account: "通信費" },
-  { keyword: "Apple", account: "通信費" },
-  { keyword: "AWS", account: "通信費" },
-  { keyword: "NTT", account: "通信費" },
-  { keyword: "ソフトバンク", account: "通信費" },
-  { keyword: "KDDI", account: "通信費" },
-  { keyword: "さくらインターネット", account: "通信費" },
   { keyword: "ENEOS", account: "車両費" },
   { keyword: "出光", account: "車両費" },
-  { keyword: "ガソリン", account: "車両費" },
-  { keyword: "年会費", account: "支払手数料" },
-  { keyword: "保険", account: "保険料" },
+  { keyword: "Amazon", account: "消耗品費" },
+  { keyword: "アマゾン", account: "消耗品費" },
+  { keyword: "Google", account: "通信費" },
+  { keyword: "Microsoft", account: "通信費" },
+  { keyword: "Zoom", account: "通信費" },
+  { keyword: "Adobe", account: "通信費" },
+  { keyword: "レストラン", account: "接待交際費" },
+  { keyword: "居酒屋", account: "接待交際費" },
+  { keyword: "カフェ", account: "会議費" },
+  { keyword: "スターバックス", account: "会議費" },
 ];
 
 const DEFAULT_CARDS = [
   "楽天カード",
   "三井住友カード",
   "JCBカード",
-  "アメリカン・エキスプレス",
-  "ダイナースクラブ",
-  "セゾンカード",
-  "イオンカード",
+  "AMEX",
+  "VISA",
+  "Mastercard",
   "dカード",
-  "PayPayカード",
+  "イオンカード",
   "その他",
 ];
 
@@ -71,29 +64,23 @@ const DEFAULT_EXPENSE_ACCOUNTS = [
 ];
 
 export const DEFAULT_PROMPT_TEMPLATE = `
-        提出されたクレジットカード明細のPDFまたは写真（複数枚ある場合は連番）から取引データを読み取り、以下のJSON形式で出力してください。
+        提出されたクレジットカード明細の画像（複数枚ある場合は連番）から取引データを読み取り、以下のJSON形式で出力してください。
 
         【基準年度】
         このデータの基準年度（開始年）は西暦「{{year}}年」です。
 
-        【日付の読み取りルール】
-        1. 明細の「利用日」「ご利用日」欄から日付を読み取ってください。
-        2. 年が省略されている場合（月/日のみの場合）は、基準年度「{{year}}年」から開始し、時系列（12月から1月への切り替わり等）を考慮して年を補完してください。
-        3. 和暦（令和）表記の場合は西暦に変換してください。（令和〇年 + 2018 = 西暦）
+        【日付の読み取りと西暦変換ルール】
+        1. 明細の日付を読み取ってください。
+        2. 「08/01」のように年が省略されている場合は、基準年度「{{year}}年」を使ってください。
+        3. 年をまたぐ場合（例: 12月から1月）は、時系列に従って年を調整してください。
         4. 出力する日付は必ず西暦の "YYYY/MM/DD" 形式にしてください。
 
         【読み取りルール】
-        - 「利用日」「利用店名・内容」「利用金額（支払金額）」を読み取ってください。
-        - 以下の行はスキップしてください：
-          ・「お支払い金額合計」「ご利用合計」「今回ご請求金額」などの合計行
-          ・「口座引落し」「お引落し」「お支払い」などの支払い（引落し）行
-          ・「前回ご請求額」「繰越残高」などの繰越行
-          ・ヘッダー行・フッター行
-        - キャンセル・返品の行は、金額をマイナス（負の値）にして含めてください
-        - 金額はカンマなしの整数にしてください（キャンセル・返品はマイナス）
-        - 分割払いの場合は、今回支払い分の金額を使用してください
-        - 複数画像のデータは全て結合し、利用日順の1つのリストにしてください
-        - もし画像にデータが見えない場合や空の場合でも、空の配列を返してください
+        - 利用日、利用店名（摘要）、金額（支払総額）を読み取ってください。
+        - 「支払区分」（1回払い、リボ等）は無視して構いませんが、もし「毎月の支払額」と「利用額」書かれている場合は「利用額」を優先してください。
+        - ポイント付与やキャンペーン情報は無視してください。
+        - 金額はカンマなしの数字のみにしてください。
+        - 複数画像のデータは全て結合し、時系列順の1つのリストにしてください。
 
         【勘定科目の推測】
         各取引に対して、以下の勘定科目リストから最も適切なものを「account」フィールドに推測して設定してください。
@@ -103,7 +90,7 @@ export const DEFAULT_PROMPT_TEMPLATE = `
         【出力形式】
         {
           "transactions": [
-            { "date": "{{year}}/05/06", "description": "アマゾン ジャパン", "amount": 3980, "note": "日用品", "account": "消耗品費" }
+            { "date": "{{year}}/05/06", "description": "ETC利用", "amount": 1500, "note": "高速代", "account": "旅費交通費" }
           ]
         }
 
@@ -112,6 +99,8 @@ export const DEFAULT_PROMPT_TEMPLATE = `
 
 @Injectable({ providedIn: "root" })
 export class CreditCardLogicService {
+  private supabase = inject(SupabaseService);
+
   apiKey = signal<string>("");
   selectedCard = signal<string>("");
   targetYear = signal<number>(new Date().getFullYear());
@@ -141,6 +130,8 @@ export class CreditCardLogicService {
 
   constructor() {
     this.loadState();
+    this.loadDataFromSupabase();
+
     effect(() => localStorage.setItem(this.prefix + "apiKey", this.apiKey()));
     effect(() =>
       localStorage.setItem(this.prefix + "selectedModel", this.selectedModel()),
@@ -187,40 +178,13 @@ export class CreditCardLogicService {
     );
     effect(() =>
       localStorage.setItem(
-        this.prefix + "expenseRules",
-        JSON.stringify(this.expenseRules()),
-      ),
-    );
-    effect(() =>
-      localStorage.setItem(
-        this.prefix + "cardOptions",
-        JSON.stringify(this.cardOptions()),
-      ),
-    );
-    effect(() =>
-      localStorage.setItem(
-        this.prefix + "expenseAccountOptions",
-        JSON.stringify(this.expenseAccountOptions()),
-      ),
-    );
-    effect(() =>
-      localStorage.setItem(
         this.prefix + "customPromptTemplate",
         this.customPromptTemplate(),
       ),
     );
-    effect(() =>
-      localStorage.setItem(
-        this.prefix + "cardOptions",
-        JSON.stringify(this.cardOptions()),
-      ),
-    );
-    effect(() =>
-      localStorage.setItem(
-        this.prefix + "expenseAccountOptions",
-        JSON.stringify(this.expenseAccountOptions()),
-      ),
-    );
+    // Supabase for rules and transactions
+    // effect(() => this.saveRulesToSupabase()); // Don't auto-save all rules on every change, too heavy. define explicit save points.
+
     effect(() => {
       const show = this.showSystemColumns();
       const tType = this.taxType();
@@ -237,25 +201,49 @@ export class CreditCardLogicService {
     });
   }
 
+  private async loadDataFromSupabase() {
+    await this.loadRulesFromSupabase();
+    // Options are local only for now
+    
+    // Load transactions
+    const txs = await this.supabase.getTransactions('credit_card');
+    this.processedTransactions.set(txs);
+     
+    this.supabase.subscribeToChanges(async () => {
+        const newTxs = await this.supabase.getTransactions('credit_card');
+        this.processedTransactions.set(newTxs);
+        await this.loadRulesFromSupabase();
+    });
+  }
+
+  private async loadRulesFromSupabase() {
+    const rules = await this.supabase.getRules();
+    if (rules && rules.length > 0) {
+      this.expenseRules.set(rules);
+    } else {
+      this.expenseRules.set([...DEFAULT_EXPENSE_RULES]);
+    }
+  }
+
   private loadState() {
     const s = (key: string) => localStorage.getItem(this.prefix + key);
-    
+
     // Unified key checking - Prioritize unified key!
-    const unifiedKey = localStorage.getItem('unified_apiKey');
+    const unifiedKey = localStorage.getItem("unified_apiKey");
 
     // Legacy migration
-    const legacyApiKey = localStorage.getItem('apiKey');
-    if (legacyApiKey && !unifiedKey && !s('apiKey')) {
-       localStorage.setItem(this.prefix + 'apiKey', legacyApiKey);
+    const legacyApiKey = localStorage.getItem("apiKey");
+    if (legacyApiKey && !unifiedKey && !s("apiKey")) {
+      localStorage.setItem(this.prefix + "apiKey", legacyApiKey);
     }
 
     // Load API Key: Unified > Specific > Legacy
     if (unifiedKey) {
-        this.apiKey.set(unifiedKey);
-    } else if (s('apiKey')) {
-        this.apiKey.set(s('apiKey')!);
+      this.apiKey.set(unifiedKey);
+    } else if (s("apiKey")) {
+      this.apiKey.set(s("apiKey")!);
     }
-    
+
     if (s("selectedModel")) this.selectedModel.set(s("selectedModel")!);
     if (s("selectedCard")) this.selectedCard.set(s("selectedCard")!);
     this.taxType.set((s("taxType") as TaxType) || "standard");
@@ -271,11 +259,8 @@ export class CreditCardLogicService {
     const autoRed = s("autoRedirectToEdit");
     if (showSys !== null) this.showSystemColumns.set(showSys === "true");
     if (autoRed !== null) this.autoRedirectToEdit.set(autoRed === "true");
-    this.expenseRules.set(
-      s("expenseRules")
-        ? JSON.parse(s("expenseRules")!)
-        : [...DEFAULT_EXPENSE_RULES],
-    );
+    // Rules, cards, accounts are loaded from Supabase now, but set defaults if not found in Supabase
+    // Actually options are local
     this.cardOptions.set(
       s("cardOptions") ? JSON.parse(s("cardOptions")!) : [...DEFAULT_CARDS],
     );
@@ -284,6 +269,8 @@ export class CreditCardLogicService {
         ? JSON.parse(s("expenseAccountOptions")!)
         : [...DEFAULT_EXPENSE_ACCOUNTS],
     );
+    // Rules default set in loadRulesFromSupabase if empty
+
     // Load custom prompt or set default if empty
     const savedPrompt = s("customPromptTemplate");
     if (savedPrompt && savedPrompt.trim()) {
@@ -483,19 +470,18 @@ export class CreditCardLogicService {
     target.update((list) => list.filter((i) => i !== item));
   }
   addRule() {
-    this.expenseRules.update((rules) => [
-      ...rules,
-      { keyword: "", account: "" },
-    ]);
+    this.upsertRule("新しいルール", "雑費");
   }
   updateRule(index: number, field: keyof Rule, value: string) {
-    this.expenseRules.update((rules) => {
-      const n = [...rules];
-      n[index] = { ...n[index], [field]: value };
-      return n;
-    });
+    const rule = this.expenseRules()[index];
+    const newRule = { ...rule, [field]: value };
+    this.upsertRule(newRule.keyword, newRule.account);
   }
-  deleteRule(index: number) {
+  async deleteRule(index: number) {
+    const ruleToDelete = this.expenseRules()[index];
+    if (ruleToDelete.id) {
+      await this.supabase.deleteRule(ruleToDelete.id);
+    }
     this.expenseRules.update((rules) => rules.filter((_, i) => i !== index));
   }
 
@@ -542,26 +528,56 @@ export class CreditCardLogicService {
       }
       addedNorms.add(normDesc);
     });
-    if (newRules.length > 0)
+    if (newRules.length > 0) {
       this.expenseRules.update((r) => [...r, ...newRules]);
+      newRules.forEach(r => this.supabase.saveRule({ ...r, transaction_type: 'expense' }));
+    }
+
   }
 
-  updateTransaction(index: number, field: keyof Transaction, value: any) {
-    this.processedTransactions.update((txs) => {
-      const n = [...txs];
-      const updated = { ...n[index], [field]: value };
+  async updateTransaction(index: number, field: keyof Transaction, value: any) {
+    const txs = this.processedTransactions();
+    const updated = { ...txs[index], [field]: value };
+
+    this.processedTransactions.update((curr) => {
+      const n = [...curr];
       n[index] = updated;
-      if (field === "account" && updated.description) {
-        this.upsertRule(updated.description, value);
-        for (let i = 0; i < n.length; i++) {
-          if (i !== index && n[i].description === updated.description)
-            n[i] = { ...n[i], account: value };
-        }
-      }
       return n;
     });
+
+    await this.supabase.saveTransaction({
+      ...updated,
+      source_type: "credit_card",
+      source_name: this.selectedCard(),
+      date: updated.date,
+      description: updated.description,
+      amount: updated.amount,
+    });
+
+    if (field === "account" && updated.description) {
+      this.upsertRule(updated.description, value);
+      this.processedTransactions.update((n) => {
+        const next = [...n];
+        for (let i = 0; i < next.length; i++) {
+          if (i !== index && next[i].description === updated.description) {
+            next[i] = { ...next[i], account: value };
+            this.supabase.saveTransaction({
+              ...next[i],
+              source_type: "credit_card",
+              source_name: this.selectedCard(),
+            });
+          }
+        }
+        return next;
+      });
+    }
   }
-  deleteTransaction(index: number) {
+
+  async deleteTransaction(index: number) {
+    const tx = this.processedTransactions()[index];
+    if (tx.id) {
+      await this.supabase.deleteTransaction(tx.id);
+    }
     this.processedTransactions.update((txs) =>
       txs.filter((_, i) => i !== index),
     );
@@ -577,6 +593,7 @@ export class CreditCardLogicService {
       }
       return [...rules, { keyword, account }];
     });
+    this.supabase.saveRule({ keyword, account, transaction_type: "expense" });
   }
 
   private async getRotatedImageData(page: PageData): Promise<string> {
@@ -631,7 +648,7 @@ export class CreditCardLogicService {
     try {
       const ai = new GoogleGenAI({ apiKey: key });
       const accountList = this.expenseAccountOptions().join("、");
-      
+
       let promptText = this.customPromptTemplate();
       if (!promptText.trim()) promptText = DEFAULT_PROMPT_TEMPLATE;
 
@@ -677,14 +694,17 @@ export class CreditCardLogicService {
         const account =
           ruleAccount !== "雑費" ? ruleAccount : aiAccount || "雑費";
         return {
-          date: tx.date || "",
+          ...tx,
           description: desc,
-          amount: Number(tx.amount) || 0,
-          note: tx.note || "",
           account,
+          source_type: "credit_card" as const,
+          source_name: card,
         };
       });
       this.processedTransactions.set(txs);
+
+      txs.forEach((tx: Transaction) => this.supabase.saveTransaction(tx));
+
       this.extractMissingRules(txs);
     } catch (err: any) {
       this.error.set(
@@ -759,6 +779,13 @@ export class CreditCardLogicService {
       // Per-rule tax category override
       if (matchedRule?.taxCategory)
         expenseTaxCategory = matchedRule.taxCategory;
+      let taxAmount = '';
+      if (taxType === 'standard' && expenseTaxCategory.includes('10%')) {
+         taxAmount = Math.floor(Number(amount) * 0.1 / 1.1).toString();
+      } else if (taxType === 'standard' && expenseTaxCategory.includes('8%')) {
+         taxAmount = Math.floor(Number(amount) * 0.08 / 1.08).toString();
+      }
+
       let rowData: string[];
       if (showSystem) {
         rowData = [
@@ -771,7 +798,7 @@ export class CreditCardLogicService {
           "",
           expenseTaxCategory,
           amount,
-          "",
+          taxAmount,
           "未払金",
           card,
           "",

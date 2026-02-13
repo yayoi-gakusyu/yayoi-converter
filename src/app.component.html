@@ -100,8 +100,12 @@
             </h2>
 
             <!-- Keyboard Shortcuts Cheat Sheet -->
-            <div class="mb-8 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-              <div class="bg-slate-50 px-4 py-3 border-b border-slate-200 font-bold text-slate-700 flex items-center gap-2">
+            <div
+              class="mb-8 bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm"
+            >
+              <div
+                class="bg-slate-50 px-4 py-3 border-b border-slate-200 font-bold text-slate-700 flex items-center gap-2"
+              >
                 ⌨️ キーボードショートカット一覧
               </div>
               <div class="p-0">
@@ -114,27 +118,78 @@
                   </thead>
                   <tbody class="divide-y divide-slate-100">
                     <tr class="hover:bg-slate-50">
-                      <td class="px-4 py-2"><kbd class="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-mono text-xs shadow-sm">Ctrl</kbd> + <kbd class="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-mono text-xs shadow-sm">D</kbd></td>
-                      <td class="px-4 py-2 text-slate-700">一つ上のセルの値をコピー（日付や科目の連続入力に便利）</td>
+                      <td class="px-4 py-2">
+                        <kbd
+                          class="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-mono text-xs shadow-sm"
+                          >Ctrl</kbd
+                        >
+                        +
+                        <kbd
+                          class="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-mono text-xs shadow-sm"
+                          >D</kbd
+                        >
+                      </td>
+                      <td class="px-4 py-2 text-slate-700">
+                        一つ上のセルの値をコピー（日付や科目の連続入力に便利）
+                      </td>
                     </tr>
                     <tr class="hover:bg-slate-50">
-                      <td class="px-4 py-2"><kbd class="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-mono text-xs shadow-sm">Delete</kbd> / <kbd class="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-mono text-xs shadow-sm">Back</kbd></td>
-                      <td class="px-4 py-2 text-slate-700">選択中のセルをクリア・削除</td>
+                      <td class="px-4 py-2">
+                        <kbd
+                          class="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-mono text-xs shadow-sm"
+                          >Delete</kbd
+                        >
+                        /
+                        <kbd
+                          class="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-mono text-xs shadow-sm"
+                          >Back</kbd
+                        >
+                      </td>
+                      <td class="px-4 py-2 text-slate-700">
+                        選択中のセルをクリア・削除
+                      </td>
                     </tr>
                     <tr class="hover:bg-slate-50">
-                      <td class="px-4 py-2"><kbd class="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-mono text-xs shadow-sm">Ctrl</kbd> + <kbd class="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-mono text-xs shadow-sm">Z</kbd></td>
+                      <td class="px-4 py-2">
+                        <kbd
+                          class="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-mono text-xs shadow-sm"
+                          >Ctrl</kbd
+                        >
+                        +
+                        <kbd
+                          class="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-mono text-xs shadow-sm"
+                          >Z</kbd
+                        >
+                      </td>
                       <td class="px-4 py-2 text-slate-700">操作を元に戻す</td>
                     </tr>
                     <tr class="hover:bg-slate-50">
-                      <td class="px-4 py-2"><kbd class="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-mono text-xs shadow-sm">Esc</kbd></td>
-                      <td class="px-4 py-2 text-slate-700">編集をキャンセルして元の値に戻す</td>
+                      <td class="px-4 py-2">
+                        <kbd
+                          class="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-mono text-xs shadow-sm"
+                          >Esc</kbd
+                        >
+                      </td>
+                      <td class="px-4 py-2 text-slate-700">
+                        編集をキャンセルして元の値に戻す
+                      </td>
                     </tr>
                     <tr class="hover:bg-slate-50">
-                      <td class="px-4 py-2 text-slate-500">ダブルクリック / <kbd class="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-mono text-xs shadow-sm">Enter</kbd></td>
-                      <td class="px-4 py-2 text-slate-700">編集モードを開始 / 確定して移動</td>
+                      <td class="px-4 py-2 text-slate-500">
+                        ダブルクリック /
+                        <kbd
+                          class="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-mono text-xs shadow-sm"
+                          >Enter</kbd
+                        >
+                      </td>
+                      <td class="px-4 py-2 text-slate-700">
+                        編集モードを開始 / 確定して移動
+                      </td>
                     </tr>
                     <tr class="hover:bg-slate-50">
-                      <td class="px-4 py-2 text-slate-500">矢印キー (↑ ↓ ← →)</td>
+                      <td class="px-4 py-2 text-slate-500">
+                        矢印キー (↑ ↓ ← →)
+                      </td>
                       <td class="px-4 py-2 text-slate-700">セルの移動</td>
                     </tr>
                   </tbody>
@@ -1058,83 +1113,101 @@
               </button>
             </div>
           } @else {
-
             <!-- Split View Layout -->
-            <div class="flex flex-col lg:flex-row gap-4 h-[calc(100vh-250px)] min-h-[600px] transition-all duration-300">
-              
+            <div
+              class="flex flex-col lg:flex-row gap-4 h-[calc(100vh-250px)] min-h-[600px] transition-all duration-300"
+            >
               <!-- Left: Image Viewer (50%) -->
               <div class="lg:w-1/2 h-[300px] lg:h-full flex flex-col">
-                 <app-image-viewer [images]="appLogic.pages()" class="flex-1 h-full"></app-image-viewer>
+                <app-image-viewer
+                  [images]="appLogic.pages()"
+                  class="flex-1 h-full"
+                ></app-image-viewer>
               </div>
 
               <!-- Right: Grid (50%) -->
               <div class="lg:w-1/2 flex flex-col gap-4 h-full">
-                <div class="p-3 bg-green-50 border border-green-200 rounded-xl shrink-0">
-                  <div class="flex items-center gap-2 text-green-800 font-bold text-sm mb-1">
+                <div
+                  class="p-3 bg-green-50 border border-green-200 rounded-xl shrink-0"
+                >
+                  <div
+                    class="flex items-center gap-2 text-green-800 font-bold text-sm mb-1"
+                  >
                     ✅ 変換結果の確認・編集
-                    <button 
-                      (click)="undo()" 
+                    <button
+                      (click)="undo()"
                       [disabled]="!historyService.canUndo()"
                       class="ml-4 px-2 py-1 text-xs bg-white border border-green-300 rounded hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1"
-                      title="Ctrl + Z">
+                      title="Ctrl + Z"
+                    >
                       <span>↩</span> 元に戻す
                     </button>
                   </div>
                   <p class="text-xs text-green-700">
                     修正内容は次回から自動適用されます。
                   </p>
-                   @if (modeService.activeMode() === "receipt") {
+                  @if (modeService.activeMode() === "receipt") {
                     <p class="text-[10px] text-green-600 mt-1">
-                      摘要: <code class="bg-white px-1 rounded">インボイス_店名_品目</code>
+                      摘要:
+                      <code class="bg-white px-1 rounded"
+                        >インボイス_店名_品目</code
+                      >
                     </p>
                   }
                 </div>
 
-            <!-- Transaction Editor Table -->
-            <app-transaction-grid
-              class="flex-1 overflow-hidden min-h-0"
-              [transactions]="appLogic.processedTransactions()"
-              [hasTypeColumn]="cfg.hasTypeColumn"
-              [hasInvoiceNumber]="cfg.hasInvoiceNumber"
-              [expenseOptions]="appLogic.expenseAccountOptions()"
-              [incomeOptions]="$any(appLogic).incomeAccountOptions ? $any(appLogic).incomeAccountOptions() : []"
-              (update)="updateTx($event.index, $event.field, $event.value)"
-              (delete)="deleteTx($event)">
-            </app-transaction-grid>
-
-            <!-- CSV Options -->
-            <div
-              class="bg-white p-4 rounded-xl border border-slate-200 flex items-center justify-between gap-4"
-            >
-              <div class="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="showSystemCols"
-                  [ngModel]="appLogic.showSystemColumns()"
-                  (ngModelChange)="appLogic.updateShowSystemColumns($event)"
-                  class="w-4 h-4 border-slate-300 rounded"
-                />
-                <label
-                  for="showSystemCols"
-                  class="text-sm text-slate-700 cursor-pointer select-none"
+                <!-- Transaction Editor Table -->
+                <app-transaction-grid
+                  class="flex-1 overflow-hidden min-h-0"
+                  [transactions]="appLogic.processedTransactions()"
+                  [hasTypeColumn]="cfg.hasTypeColumn"
+                  [hasInvoiceNumber]="cfg.hasInvoiceNumber"
+                  [expenseOptions]="appLogic.expenseAccountOptions()"
+                  [incomeOptions]="
+                    $any(appLogic).incomeAccountOptions
+                      ? $any(appLogic).incomeAccountOptions()
+                      : []
+                  "
+                  (update)="updateTx($event.index, $event.field, $event.value)"
+                  (delete)="deleteTx($event)"
                 >
-                  弥生インポート用情報（フラグ・タイプ等）を含める
-                </label>
-              </div>
+                </app-transaction-grid>
 
-              <div class="text-right text-xs text-slate-400">
-                自動保存済み・即時CSV反映
+                <!-- CSV Options -->
+                <div
+                  class="bg-white p-4 rounded-xl border border-slate-200 flex items-center justify-between gap-4"
+                >
+                  <div class="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="showSystemCols"
+                      [ngModel]="appLogic.showSystemColumns()"
+                      (ngModelChange)="appLogic.updateShowSystemColumns($event)"
+                      class="w-4 h-4 border-slate-300 rounded"
+                    />
+                    <label
+                      for="showSystemCols"
+                      class="text-sm text-slate-700 cursor-pointer select-none"
+                    >
+                      弥生インポート用情報（フラグ・タイプ等）を含める
+                    </label>
+                  </div>
+
+                  <div class="text-right text-xs text-slate-400">
+                    自動保存済み・即時CSV反映
+                  </div>
+                </div>
+
+                <button
+                  (click)="appLogic.downloadCsv()"
+                  class="w-full py-4 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 text-lg"
+                >
+                  <span>📥</span> CSVをダウンロード
+                </button>
               </div>
+              <!-- End Right Column -->
             </div>
-
-            <button
-              (click)="appLogic.downloadCsv()"
-              class="w-full py-4 bg-green-600 hover:bg-green-700 text-white rounded-xl font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 text-lg"
-            >
-              <span>📥</span> CSVをダウンロード
-            </button>
-              </div> <!-- End Right Column -->
-            </div> <!-- End Split View -->
+            <!-- End Split View -->
           }
         </div>
       }
@@ -1153,5 +1226,17 @@
 
   <div class="text-center p-4 text-white/70 text-xs">
     KISS原則に基づくシンプル設計 | {{ cfg.headerTitle }}
+  </div>
+
+  <!-- DEBUG OVERLAY -->
+  <div
+    class="fixed bottom-4 right-4 bg-black/80 text-white p-4 rounded-lg text-xs font-mono z-50 pointer-events-auto"
+  >
+    <div class="font-bold mb-1 text-green-400">DEBUG INFO</div>
+    <div>Mode: {{ modeService.activeMode() }}</div>
+    <div>TX Count: {{ appLogic.processedTransactions().length }}</div>
+    <div>Tab: {{ activeTab() }}</div>
+    <div>Error: {{ appLogic.error() || "None" }}</div>
+    <div>Supabase: {{ !!appLogic["supabase"] ? "Injected" : "Missing" }}</div>
   </div>
 </div>

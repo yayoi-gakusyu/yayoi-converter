@@ -1,0 +1,4 @@
+
+> 弥生csv変換_統合版@0.0.0 test
+> vitest run --reporter=verbose
+

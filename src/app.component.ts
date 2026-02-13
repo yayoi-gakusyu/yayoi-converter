@@ -1,5 +1,5 @@
 
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, effect, untracked } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ModeService } from './services/mode.service';
@@ -26,6 +26,16 @@ export class AppComponent {
 
   get appLogic() { return this.modeService.activeService(); }
   get cfg() { return this.modeService.modeConfig(); }
+
+  constructor() {
+    effect(() => {
+      const txs = this.appLogic.processedTransactions();
+      const currentTab = untracked(this.activeTab);
+      if (txs.length > 0 && currentTab === 'guide') {
+        this.activeTab.set('result');
+      }
+    });
+  }
 
   @HostListener('window:keydown.control.z', ['$event'])
   onUndo(event: KeyboardEvent) {

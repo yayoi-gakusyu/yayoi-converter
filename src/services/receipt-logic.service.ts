@@ -1,7 +1,8 @@
 
-import { Injectable, signal, effect } from '@angular/core';
+import { Injectable, signal, effect, inject } from '@angular/core';
 import { GoogleGenAI } from '@google/genai';
 import { Rule, Transaction, TaxType, normalizeForMatch } from '../types';
+import { SupabaseService } from './supabase.service';
 import Encoding from 'encoding-japanese';
 
 export interface PageData {
@@ -74,6 +75,8 @@ export const DEFAULT_PROMPT_TEMPLATE = `
 
 @Injectable({ providedIn: 'root' })
 export class ReceiptLogicService {
+  private supabase = inject(SupabaseService);
+  
   apiKey = signal<string>('');
   targetYear = signal<number>(new Date().getFullYear());
   taxType = signal<TaxType>('standard');
@@ -101,6 +104,8 @@ export class ReceiptLogicService {
 
   constructor() {
     this.loadState();
+    this.loadDataFromSupabase();
+
     effect(() => localStorage.setItem(this.prefix + 'apiKey', this.apiKey()));
     effect(() => localStorage.setItem(this.prefix + 'selectedModel', this.selectedModel()));
     effect(() => localStorage.setItem(this.prefix + 'taxType', this.taxType()));
@@ -110,8 +115,11 @@ export class ReceiptLogicService {
     effect(() => localStorage.setItem(this.prefix + 'simplifiedTaxRate', this.simplifiedTaxRate()));
     effect(() => localStorage.setItem(this.prefix + 'showSystemColumns', String(this.showSystemColumns())));
     effect(() => localStorage.setItem(this.prefix + 'autoRedirectToEdit', String(this.autoRedirectToEdit())));
-    effect(() => localStorage.setItem(this.prefix + 'expenseRules', JSON.stringify(this.expenseRules())));
+    // LocalStorage for rules is partially obsolete as we use Supabase, but keeping it for offline/fallback or cache might be confusing.
+    // Let's rely on Supabase for rules, but populate default if empty.
+    // effect(() => localStorage.setItem(this.prefix + 'expenseRules', JSON.stringify(this.expenseRules())));
     effect(() => localStorage.setItem(this.prefix + 'expenseAccountOptions', JSON.stringify(this.expenseAccountOptions())));
+
     effect(() => localStorage.setItem(this.prefix + 'customPromptTemplate', this.customPromptTemplate()));
     effect(() => {
       const show = this.showSystemColumns();
@@ -147,10 +155,12 @@ export class ReceiptLogicService {
     if (s('simplifiedTaxRate')) this.simplifiedTaxRate.set(s('simplifiedTaxRate') as any);
     const showSys = s('showSystemColumns');
     const autoRed = s('autoRedirectToEdit');
-    if (showSys !== null) this.showSystemColumns.set(showSys === 'true');
     if (autoRed !== null) this.autoRedirectToEdit.set(autoRed === 'true');
-    this.expenseRules.set(s('expenseRules') ? JSON.parse(s('expenseRules')!) : [...DEFAULT_EXPENSE_RULES]);
+    // Rules are loaded from Supabase asynchronously, but we set default first
+    this.expenseRules.set([...DEFAULT_EXPENSE_RULES]);
     this.expenseAccountOptions.set(s('expenseAccountOptions') ? JSON.parse(s('expenseAccountOptions')!) : [...DEFAULT_EXPENSE_ACCOUNTS]);
+
+
     
     // Load custom prompt or default
     const savedPrompt = s('customPromptTemplate');
@@ -173,6 +183,29 @@ export class ReceiptLogicService {
   updateAutoRedirectToEdit(val: boolean) { this.autoRedirectToEdit.set(val); }
   updatePromptTemplate(template: string) { this.customPromptTemplate.set(template); }
   resetPromptTemplate() { this.customPromptTemplate.set(DEFAULT_PROMPT_TEMPLATE); }
+
+  private async loadDataFromSupabase() {
+    // Load rules
+    const rules = await this.supabase.getRules();
+    // Filter for receipt/expense rules if we want strict typing? 
+    // Currently learning_rules mixes them, but keyword is unique.
+    // We can just use all rules or filter by transaction_type if we added it.
+    if (rules && rules.length > 0) {
+      this.expenseRules.set(rules);
+    }
+
+    // Load transactions
+    const txs = await this.supabase.getTransactions('receipt');
+    this.processedTransactions.set(txs);
+
+    // Subscribe to changes
+    this.supabase.subscribeToChanges(async () => {
+       const newTxs = await this.supabase.getTransactions('receipt');
+       this.processedTransactions.set(newTxs);
+       const newRules = await this.supabase.getRules();
+       if (newRules && newRules.length > 0) this.expenseRules.set(newRules);
+    });
+  }
 
   async setFile(file: File) {
     this.isLoading.set(true);
@@ -261,11 +294,21 @@ export class ReceiptLogicService {
     this.expenseAccountOptions.update(list => list.includes(item) ? list : [...list, item]);
   }
   removeItem(type: 'expenseAccount', item: string) { this.expenseAccountOptions.update(list => list.filter(i => i !== item)); }
-  addRule() { this.expenseRules.update(rules => [...rules, { keyword: '', account: '' }]); }
+  addRule() { this.upsertRule('新しいルール', '雑費'); }
   updateRule(index: number, field: keyof Rule, value: string) {
-    this.expenseRules.update(rules => { const n = [...rules]; n[index] = { ...n[index], [field]: value }; return n; });
+     const rule = this.expenseRules()[index];
+     const newRule = { ...rule, [field]: value };
+     this.upsertRule(newRule.keyword, newRule.account);
   }
-  deleteRule(index: number) { this.expenseRules.update(rules => rules.filter((_, i) => i !== index)); }
+  async deleteRule(index: number) { 
+    const rule = this.expenseRules()[index];
+    if (rule.id) {
+        await this.supabase.deleteRule(rule.id);
+    }
+    this.expenseRules.update(rules => rules.filter((_, i) => i !== index)); 
+  }
+
+
 
   findAccount(description: string): string {
     const norm = normalizeForMatch(description);
@@ -297,32 +340,72 @@ export class ReceiptLogicService {
       }
       addedNorms.add(normDesc);
     });
-    if (newRules.length > 0) this.expenseRules.update(r => [...r, ...newRules]);
+    if (newRules.length > 0) {
+        this.expenseRules.update(r => [...r, ...newRules]);
+        newRules.forEach(r => this.supabase.saveRule({ ...r, transaction_type: 'expense' }));
+    }
   }
 
-  updateTransaction(index: number, field: keyof Transaction, value: any) {
-    this.processedTransactions.update(txs => {
-      const n = [...txs];
-      const updated = { ...n[index], [field]: value };
-      n[index] = updated;
-      if (field === 'account' && updated.description) {
-        this.upsertRule(updated.description, value);
-        for (let i = 0; i < n.length; i++) {
-          if (i !== index && n[i].description === updated.description) n[i] = { ...n[i], account: value };
-        }
-      }
-      return n;
+  async updateTransaction(index: number, field: keyof Transaction, value: any) {
+    const txs = this.processedTransactions();
+    const updated = { ...txs[index], [field]: value };
+    
+    // Optimistic update
+    this.processedTransactions.update(curr => {
+        const n = [...curr];
+        n[index] = updated;
+        return n;
     });
+
+    // Save to Supabase
+    await this.supabase.saveTransaction({
+        ...updated,
+         // Ensure core fields are present for Supabase
+        source_type: 'receipt',
+        date: updated.date,
+        description: updated.description,
+        amount: updated.amount
+    });
+
+    if (field === 'account' && updated.description) {
+        this.upsertRule(updated.description, value);
+        // Bulk update local for responsiveness
+        this.processedTransactions.update(n => {
+            const next = [...n];
+            for (let i = 0; i < next.length; i++) {
+                if (i !== index && next[i].description === updated.description) {
+                     next[i] = { ...next[i], account: value };
+                     // We should ideally save these "side-effect" updates to Supabase too
+                     // but to avoid storm, maybe we skip or do it silently.
+                     // For strictness, let's save:
+                     this.supabase.saveTransaction({ ...next[i], source_type: 'receipt' });
+                }
+            }
+            return next;
+        });
+    }
   }
-  deleteTransaction(index: number) { this.processedTransactions.update(txs => txs.filter((_, i) => i !== index)); }
+
+  async deleteTransaction(index: number) { 
+      const tx = this.processedTransactions()[index];
+      if (tx.id) {
+          await this.supabase.deleteTransaction(tx.id);
+      }
+      this.processedTransactions.update(txs => txs.filter((_, i) => i !== index)); 
+  }
+
 
   private upsertRule(keyword: string, account: string) {
-    this.expenseRules.update(rules => {
-      const idx = rules.findIndex(r => r.keyword === keyword);
-      if (idx !== -1) { const n = [...rules]; n[idx] = { ...n[idx], account }; return n; }
-      return [...rules, { keyword, account }];
-    });
+      // Optimistic
+      this.expenseRules.update(rules => {
+        const idx = rules.findIndex(r => r.keyword === keyword);
+        if (idx !== -1) { const n = [...rules]; n[idx] = { ...n[idx], account }; return n; }
+        return [...rules, { keyword, account }];
+      });
+      // Persist
+      this.supabase.saveRule({ keyword, account, transaction_type: 'expense' });
   }
+
 
   private async getRotatedImageData(page: PageData): Promise<string> {
     if (page.rotation === 0) return page.image;
@@ -391,10 +474,24 @@ export class ReceiptLogicService {
         const ruleAccount = this.findAccount(desc);
         const aiAccount = tx.account || '';
         const account = (ruleAccount !== '雑費') ? ruleAccount : (aiAccount || '雑費');
-        return { date: tx.date || '', description: desc, amount: Number(tx.amount) || 0, note: tx.note || '', account, invoiceNumber: tx.invoiceNumber || '' };
+        return { 
+            date: tx.date || '', 
+            description: desc, 
+            amount: Number(tx.amount) || 0, 
+            note: tx.note || '', 
+            account, 
+            invoiceNumber: tx.invoiceNumber || '',
+            source_type: 'receipt' as const
+        };
       });
+      
       this.processedTransactions.set(txs);
+      
+      // Save all new transactions to Supabase
+      txs.forEach(tx => this.supabase.saveTransaction(tx));
+
       this.extractMissingRules(txs);
+
     } catch (err: any) {
       this.error.set('エラーが発生しました: ' + (err.message || '不明なエラー'));
     } finally {
@@ -425,11 +522,18 @@ export class ReceiptLogicService {
       if (taxType === 'exempt' || taxType === 'simplified') expenseTaxCategory = '対象外';
       // Per-rule tax category override
       if (matchedRule?.taxCategory) expenseTaxCategory = matchedRule.taxCategory;
+      let taxAmount = '';
+      if (taxType === 'standard' && expenseTaxCategory.includes('10%')) {
+         taxAmount = Math.floor(Number(amount) * 0.1 / 1.1).toString();
+      } else if (taxType === 'standard' && expenseTaxCategory.includes('8%')) {
+         taxAmount = Math.floor(Number(amount) * 0.08 / 1.08).toString();
+      }
+
       let rowData: string[];
       if (showSystem) {
-        rowData = ['2000', '', '', tx.date, account, '', '', expenseTaxCategory, amount, '', '現金', '', '', '対象外', amount, '', note, '', '', '0', '', '', '', '', 'no'];
+        rowData = ['2000', '', '', tx.date, account, '', '', expenseTaxCategory, amount, taxAmount, '現金', '', '', '対象外', amount, '', note, '', '', '0', '', '', '', '', 'no'];
       } else {
-        rowData = [tx.date, account, '', '', expenseTaxCategory, amount, '', '現金', '', '', '対象外', amount, '', note];
+        rowData = [tx.date, account, '', '', expenseTaxCategory, amount, taxAmount, '現金', '', '', '対象外', amount, '', note];
       }
       rows.push(rowData.map(cell => `"${cell}"`).join(','));
     });

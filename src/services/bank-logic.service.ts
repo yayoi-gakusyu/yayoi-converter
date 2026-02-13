@@ -1,7 +1,8 @@
 
-import { Injectable, signal, effect } from '@angular/core';
+import { Injectable, signal, effect, inject } from '@angular/core';
 import { GoogleGenAI } from '@google/genai';
 import { Rule, Transaction, TaxType, normalizeForMatch } from '../types';
+import { SupabaseService } from './supabase.service';
 import Encoding from 'encoding-japanese';
 
 export interface PageData {
@@ -83,6 +84,8 @@ export const DEFAULT_PROMPT_TEMPLATE = `
 
 @Injectable({ providedIn: 'root' })
 export class BankLogicService {
+  private supabase = inject(SupabaseService);
+  
   apiKey = signal<string>('');
   selectedBank = signal<string>('');
   targetYear = signal<number>(new Date().getFullYear());
@@ -114,6 +117,8 @@ export class BankLogicService {
 
   constructor() {
     this.loadState();
+    this.loadDataFromSupabase();
+
     effect(() => localStorage.setItem(this.prefix + 'apiKey', this.apiKey()));
     effect(() => localStorage.setItem(this.prefix + 'selectedModel', this.selectedModel()));
     effect(() => localStorage.setItem(this.prefix + 'selectedBank', this.selectedBank()));
@@ -124,8 +129,10 @@ export class BankLogicService {
     effect(() => localStorage.setItem(this.prefix + 'simplifiedTaxRate', this.simplifiedTaxRate()));
     effect(() => localStorage.setItem(this.prefix + 'showSystemColumns', String(this.showSystemColumns())));
     effect(() => localStorage.setItem(this.prefix + 'autoRedirectToEdit', String(this.autoRedirectToEdit())));
-    effect(() => localStorage.setItem(this.prefix + 'expenseRules', JSON.stringify(this.expenseRules())));
-    effect(() => localStorage.setItem(this.prefix + 'incomeRules', JSON.stringify(this.incomeRules())));
+    effect(() => localStorage.setItem(this.prefix + 'autoRedirectToEdit', String(this.autoRedirectToEdit())));
+    // effect(() => localStorage.setItem(this.prefix + 'expenseRules', JSON.stringify(this.expenseRules())));
+    // effect(() => localStorage.setItem(this.prefix + 'incomeRules', JSON.stringify(this.incomeRules())));
+
     effect(() => localStorage.setItem(this.prefix + 'bankOptions', JSON.stringify(this.bankOptions())));
     effect(() => localStorage.setItem(this.prefix + 'expenseAccountOptions', JSON.stringify(this.expenseAccountOptions())));
     effect(() => localStorage.setItem(this.prefix + 'incomeAccountOptions', JSON.stringify(this.incomeAccountOptions())));
@@ -182,8 +189,9 @@ export class BankLogicService {
     const autoRed = s('autoRedirectToEdit');
     if (showSys !== null) this.showSystemColumns.set(showSys === 'true');
     if (autoRed !== null) this.autoRedirectToEdit.set(autoRed === 'true');
-    this.expenseRules.set(s('expenseRules') ? JSON.parse(s('expenseRules')!) : [...DEFAULT_EXPENSE_RULES]);
-    this.incomeRules.set(s('incomeRules') ? JSON.parse(s('incomeRules')!) : [...DEFAULT_INCOME_RULES]);
+    this.expenseRules.set([...DEFAULT_EXPENSE_RULES]);
+    this.incomeRules.set([...DEFAULT_INCOME_RULES]);
+
     this.bankOptions.set(s('bankOptions') ? JSON.parse(s('bankOptions')!) : [...DEFAULT_BANKS]);
     this.expenseAccountOptions.set(s('expenseAccountOptions') ? JSON.parse(s('expenseAccountOptions')!) : [...DEFAULT_EXPENSE_ACCOUNTS]);
     this.incomeAccountOptions.set(s('incomeAccountOptions') ? JSON.parse(s('incomeAccountOptions')!) : [...DEFAULT_INCOME_ACCOUNTS]);
@@ -226,6 +234,30 @@ export class BankLogicService {
   updateAutoRedirectToEdit(val: boolean) { this.autoRedirectToEdit.set(val); }
   updatePromptTemplate(template: string) { this.customPromptTemplate.set(template); }
   resetPromptTemplate() { this.customPromptTemplate.set(DEFAULT_PROMPT_TEMPLATE); }
+
+  private async loadDataFromSupabase() {
+    // Load rules
+    const rules = await this.supabase.getRules();
+    if (rules && rules.length > 0) {
+      this.expenseRules.set(rules.filter(r => r.transaction_type === 'expense' || !r.transaction_type));
+      this.incomeRules.set(rules.filter(r => r.transaction_type === 'income'));
+    }
+
+    // Load transactions
+    const txs = await this.supabase.getTransactions('bank');
+    this.processedTransactions.set(txs);
+
+    // Subscribe
+    this.supabase.subscribeToChanges(async () => {
+       const newTxs = await this.supabase.getTransactions('bank');
+       this.processedTransactions.set(newTxs);
+       const newRules = await this.supabase.getRules();
+       if (newRules && newRules.length > 0) {
+          this.expenseRules.set(newRules.filter(r => r.transaction_type === 'expense' || !r.transaction_type));
+          this.incomeRules.set(newRules.filter(r => r.transaction_type === 'income'));
+       }
+    });
+  }
 
   async setFile(file: File) {
     this.isLoading.set(true);
@@ -293,17 +325,27 @@ export class BankLogicService {
     target.update(list => list.filter(i => i !== item));
   }
   addRule(type: 'expense' | 'income') {
-    const target = type === 'expense' ? this.expenseRules : this.incomeRules;
-    target.update(rules => [...rules, { keyword: '', account: '' }]);
+    this.upsertRule('新しいルール', '雑費', type === 'expense');
   }
+
   updateRule(type: 'expense' | 'income', index: number, field: keyof Rule, value: string) {
-    const target = type === 'expense' ? this.expenseRules : this.incomeRules;
-    target.update(rules => { const n = [...rules]; n[index] = { ...n[index], [field]: value }; return n; });
+    const rules = type === 'expense' ? this.expenseRules() : this.incomeRules();
+    const rule = rules[index];
+    const newRule = { ...rule, [field]: value };
+    this.upsertRule(newRule.keyword, newRule.account, type === 'expense');
   }
-  deleteRule(type: 'expense' | 'income', index: number) {
+
+  async deleteRule(type: 'expense' | 'income', index: number) {
     const target = type === 'expense' ? this.expenseRules : this.incomeRules;
+    const rules = target();
+    const rule = rules[index];
+    if (rule.id) {
+        await this.supabase.deleteRule(rule.id);
+    }
     target.update(rules => rules.filter((_, i) => i !== index));
   }
+
+
 
   findAccount(description: string, isExpense: boolean): string {
     const norm = normalizeForMatch(description);
@@ -347,25 +389,60 @@ export class BankLogicService {
         addedIncNorms.add(normDesc);
       }
     });
-    if (newExp.length > 0) this.expenseRules.update(r => [...r, ...newExp]);
-    if (newInc.length > 0) this.incomeRules.update(r => [...r, ...newInc]);
+    if (newExp.length > 0) {
+        this.expenseRules.update(r => [...r, ...newExp]);
+        newExp.forEach(r => this.supabase.saveRule({ ...r, transaction_type: 'expense' }));
+    }
+    if (newInc.length > 0) {
+        this.incomeRules.update(r => [...r, ...newInc]);
+        newInc.forEach(r => this.supabase.saveRule({ ...r, transaction_type: 'income' }));
+    }
+
   }
 
-  updateTransaction(index: number, field: keyof Transaction, value: any) {
-    this.processedTransactions.update(txs => {
-      const n = [...txs];
-      const updated = { ...n[index], [field]: value };
-      n[index] = updated;
-      if (field === 'account' && updated.description) {
-        this.upsertRule(updated.description, value, updated.type === 'expense');
-        for (let i = 0; i < n.length; i++) {
-          if (i !== index && n[i].description === updated.description && n[i].type === updated.type) n[i] = { ...n[i], account: value };
-        }
-      }
-      return n;
+  async updateTransaction(index: number, field: keyof Transaction, value: any) {
+    const txs = this.processedTransactions();
+    const updated = { ...txs[index], [field]: value };
+
+    this.processedTransactions.update(curr => {
+        const n = [...curr];
+        n[index] = updated;
+        return n;
     });
+
+    await this.supabase.saveTransaction({
+        ...updated,
+        source_type: 'bank',
+        source_name: this.selectedBank(),
+        date: updated.date,
+        description: updated.description,
+        amount: updated.amount,
+        type: updated.type
+    });
+
+    if (field === 'account' && updated.description) {
+        this.upsertRule(updated.description, value, updated.type === 'expense');
+        this.processedTransactions.update(n => {
+            const next = [...n];
+            for (let i = 0; i < next.length; i++) {
+                 if (i !== index && next[i].description === updated.description && next[i].type === updated.type) {
+                     next[i] = { ...next[i], account: value };
+                     this.supabase.saveTransaction({ ...next[i], source_type: 'bank', source_name: this.selectedBank() });
+                 }
+            }
+            return next;
+        });
+    }
   }
-  deleteTransaction(index: number) { this.processedTransactions.update(txs => txs.filter((_, i) => i !== index)); }
+
+  async deleteTransaction(index: number) { 
+      const tx = this.processedTransactions()[index];
+      if (tx.id) {
+          await this.supabase.deleteTransaction(tx.id);
+      }
+      this.processedTransactions.update(txs => txs.filter((_, i) => i !== index)); 
+  }
+
 
   private upsertRule(keyword: string, account: string, isExpense: boolean) {
     const sig = isExpense ? this.expenseRules : this.incomeRules;
@@ -374,7 +451,9 @@ export class BankLogicService {
       if (idx !== -1) { const n = [...rules]; n[idx] = { ...n[idx], account }; return n; }
       return [...rules, { keyword, account }];
     });
+    this.supabase.saveRule({ keyword, account, transaction_type: isExpense ? 'expense' : 'income' });
   }
+
 
   private async getRotatedImageData(page: PageData): Promise<string> {
     if (page.rotation === 0) return page.image;
@@ -449,10 +528,20 @@ export class BankLogicService {
         const ruleAccount = this.findAccount(desc, isExpense);
         const aiAccount = tx.account || '';
         const account = (ruleAccount !== defaultAccount) ? ruleAccount : (aiAccount || defaultAccount);
-        return { ...tx, description: desc, account };
+        return { 
+            ...tx, 
+            description: desc, 
+            account,
+            source_type: 'bank' as const,
+            source_name: bank
+        };
       });
       this.processedTransactions.set(txs);
+      
+      txs.forEach(tx => this.supabase.saveTransaction(tx));
+
       this.extractMissingRules(txs);
+
     } catch (err: any) {
       this.error.set('エラーが発生しました: ' + (err.message || '不明なエラー'));
     } finally {
@@ -506,11 +595,18 @@ export class BankLogicService {
       const credAcc = isExpense ? '普通預金' : account;
       const credSub = isExpense ? bank : '';
       const credTax = isExpense ? '対象外' : incomeTaxCategory;
+      let taxAmount = '';
+      if (taxType === 'standard' && expenseTaxCategory.includes('10%')) {
+         taxAmount = Math.floor(Number(amount) * 0.1 / 1.1).toString();
+      } else if (taxType === 'standard' && expenseTaxCategory.includes('8%')) {
+         taxAmount = Math.floor(Number(amount) * 0.08 / 1.08).toString();
+      }
+
       let rowData: string[];
       if (showSystem) {
-        rowData = ['2000', '', '', tx.date, debAcc, debSub, '', debTax, amount, '', credAcc, credSub, '', credTax, amount, '', note, '', '', '0', '', '', '', '', 'no'];
+        rowData = ['2000', '', '', tx.date, debAcc, debSub, '', debTax, amount, taxAmount, credAcc, credSub, '', credTax, amount, '', note, '', '', '0', '', '', '', '', 'no'];
       } else {
-        rowData = [tx.date, debAcc, debSub, '', debTax, amount, '', credAcc, credSub, '', credTax, amount, '', note];
+        rowData = [tx.date, debAcc, debSub, '', debTax, amount, taxAmount, credAcc, credSub, '', credTax, amount, '', note];
       }
       rows.push(rowData.map(cell => `"${cell}"`).join(','));
     });
