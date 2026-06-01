@@ -1,22 +1,44 @@
-# 弥生CSV変換ツール - プロジェクト指示書
+# 弥生CSV変換ツール（統合版）
 
-## アプリの起動方法（標準手順）
+## 概要
 
-このアプリはNode.jsが未インストールの環境のため、ビルド済みの `dist` フォルダを使ってローカルサーバーで配信する。
+領収書・クレジットカード明細・通帳の画像/PDFをGoogle Gemini AIで読み取り、弥生会計用のCSVを生成するWebアプリケーション。
 
-### 手順
+## 技術スタック
 
-1. `serve.ps1` をバックグラウンドで起動する
-   ```
-   powershell.exe -NoProfile -ExecutionPolicy Bypass -File "serve.ps1"
-   ```
-2. Chromeで `http://localhost:8080/` を開く
-   ```
-   powershell.exe -NoProfile -Command "Start-Process 'chrome.exe' 'http://localhost:8080/'"
-   ```
+- Angular 21 (Standalone Components, Signals)
+- Google Gemini API (OCR・データ抽出)
+- Tailwind CSS
+- TypeScript
+- Vitest (テスト)
 
-### 注意事項
+## 開発コマンド
 
-- ブラウザは必ず **Chrome** を使う（Edgeではなく）
-- サーバーはポート **8080** で起動する
-- `npm run dev` は使用しない（Node.js未インストールのため）
+```bash
+npm install --legacy-peer-deps
+npm run dev          # 開発サーバー起動
+npm run build        # プロダクションビルド
+npm test             # テスト実行
+```
+
+## デプロイ
+
+GitHub Actionsにより、`main` ブランチへのプッシュ時に自動ビルド・GitHub Pagesへデプロイされる。
+
+## プロジェクト構成
+
+```
+src/
+├── app.component.ts/html     # メインコンポーネント
+├── components/               # UIコンポーネント群
+├── services/
+│   ├── base-logic.service.ts        # 共通ロジック基底クラス
+│   ├── creditcard-logic.service.ts  # クレカ明細モード
+│   ├── bank-logic.service.ts        # 通帳モード
+│   ├── receipt-logic.service.ts     # 領収書モード
+│   ├── mode.service.ts              # モード切替管理
+│   ├── journal-learning.service.ts  # 仕訳学習
+│   └── history.service.ts           # Undo履歴
+├── utils/                    # ユーティリティ (税計算, フォーマット, AIリトライ)
+└── types.ts                  # 型定義
+```

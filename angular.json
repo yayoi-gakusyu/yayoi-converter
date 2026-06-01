@@ -18,6 +18,7 @@
             },
             "browser": "index.tsx",
             "tsConfig": "tsconfig.json",
+            "styles": ["index.css"],
             "assets": [
               {
                 "glob": "**/*",
