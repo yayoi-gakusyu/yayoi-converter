@@ -1,38 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { BankLogicService } from './bank-logic.service';
-import { SupabaseService } from './supabase.service';
 
-// Mock SupabaseService
-const mockSupabase = {
-  getRules: vi.fn(),
-  getTransactions: vi.fn(),
-  subscribeToChanges: vi.fn(),
-} as unknown as SupabaseService;
-
-// Mock Angular injections if needed
-// Since we are testing logic, we might need to bypass Angular's DI or mock it.
-// However, BankLogicService uses `inject()` from @angular/core.
-// In a pure unit test environment without Angular TestBed, `inject()` might fail.
-// For now, let's create a partial mock or see if we can instantiate it.
-// 
-// Actually, since `inject` is used in field initialization:
-// private supabase = inject(SupabaseService);
-// We cannot easily instantiate this class with `new BankLogicService()` in a non-Angular environment without a transformation or TestBed.
-//
-// BUT, since we want to show "Vitest" working quickly, let's create a specific test that MOCKS the `inject` function globally or uses a test helper.
-
-// Let's try to mock @angular/core's inject
 vi.mock('@angular/core', async () => {
     const actual = await vi.importActual('@angular/core');
     return {
         ...actual,
-        inject: (token: any) => {
-             if (token === SupabaseService) return mockSupabase;
-             return {};
-        },
+        inject: () => ({}),
         Injectable: () => (target: any) => target,
         signal: (initial: any) => {
-            // Simple signal mock for testing
             let value = initial;
             const s = (newVal?: any) => {
                 if (newVal !== undefined) value = newVal;
@@ -42,7 +17,7 @@ vi.mock('@angular/core', async () => {
             s.update = (fn: any) => value = fn(value);
             return s;
         },
-        effect: () => {} // No-op effect
+        effect: () => {}
     };
 });
 

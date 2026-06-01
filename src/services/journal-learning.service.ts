@@ -1,5 +1,4 @@
-import { Injectable, signal, inject } from '@angular/core';
-import { SupabaseService } from './supabase.service';
+import { Injectable, signal } from '@angular/core';
 import { Rule, JournalPattern } from '../types';
 import * as Encoding from 'encoding-japanese';
 
@@ -21,15 +20,14 @@ interface LearningResult {
   providedIn: 'root'
 })
 export class JournalLearningService {
-  private supabase = inject(SupabaseService);
-  
+  private storageKey = 'journal_learning_rules';
+
   // Signals
-  learningRules = signal<Map<string, JournalPattern>>(new Map()); // Key: Description (normalized)
+  learningRules = signal<Map<string, JournalPattern>>(new Map());
   isProcessing = signal<boolean>(false);
   lastResult = signal<LearningResult | null>(null);
   error = signal<string>('');
 
-  // Pre-defined rules for cold start
   private defaultRules: JournalPattern[] = [
     { targetDescription: 'AMAZON', account: '消耗品費' },
     { targetDescription: 'ETC', account: '旅費交通費' },
@@ -38,36 +36,35 @@ export class JournalLearningService {
 
   constructor() {
     this.loadRules();
-    
-    // Subscribe to Realtime Updates
-    this.supabase.subscribeToRules((payload: any) => {
-        // payload.new contains the new record
-        if (payload.new) {
-            const rule = payload.new as Rule;
-            this.updateLocalRule(rule);
-        }
-    });
   }
 
-  // Load rules from Supabase (fallback to defaults if empty initially)
-  async loadRules() {
-    const rules = await this.supabase.getRules();
+  loadRules() {
     const map = new Map<string, JournalPattern>();
-    
-    // Always load defaults first
     this.defaultRules.forEach(r => map.set(this.normalize(r.targetDescription), r));
 
-    // Overwrite with Cloud rules
-    rules.forEach((r: any) => {
-        map.set(this.normalize(r.keyword), {
+    const saved = localStorage.getItem(this.storageKey);
+    if (saved) {
+      try {
+        const rules: Rule[] = JSON.parse(saved);
+        rules.forEach(r => {
+          map.set(this.normalize(r.keyword), {
             targetDescription: r.keyword,
             account: r.account,
             subAccount: r.sub_account,
-            taxType: r.tax_type
+            taxType: r.taxCategory
+          });
         });
-    });
-
+      } catch {}
+    }
     this.learningRules.set(map);
+  }
+
+  private saveRulesToStorage() {
+    const rules: Rule[] = [];
+    for (const [, pattern] of this.learningRules()) {
+      rules.push({ keyword: pattern.targetDescription, account: pattern.account, sub_account: pattern.subAccount, taxCategory: pattern.taxType });
+    }
+    localStorage.setItem(this.storageKey, JSON.stringify(rules));
   }
 
   // Helper to update local map from a Rule object
@@ -108,27 +105,23 @@ export class JournalLearningService {
     return null;
   }
 
-  // Learn a new rule (Upsert to Cloud)
-  async learnRule(description: string, account: string, subAccount?: string, taxType?: string) {
+  learnRule(description: string, account: string, subAccount?: string, taxType?: string) {
     if (!description || !account) return;
-    const normalized = this.normalize(description);
-
-    // 1. Optimistic UI Update
     const rule: Rule = {
-        keyword: normalized,
+        keyword: this.normalize(description),
         account: account,
         sub_account: subAccount,
         taxCategory: taxType
     };
     this.updateLocalRule(rule);
-
-    // 2. Send to Cloud
-    await this.supabase.saveRule(rule);
+    this.saveRulesToStorage();
   }
 
   deleteRule(description: string) {
-      // In cloud mode, maybe we don't delete? Or hard delete?
-      // For now, let's just ignore locally or implement delete in SupabaseService later.
+    const map = new Map(this.learningRules());
+    map.delete(this.normalize(description));
+    this.learningRules.set(map);
+    this.saveRulesToStorage();
   }
 
   async processFile(file: File) {
@@ -144,7 +137,7 @@ export class JournalLearningService {
       // For now, just logging entries or maybe auto-learning?
       // Leaving this logic existing just for compilation, but logic might need update.
       // this.lastResult.set(result);
-      alert('現在クラウドモードのため、CSV一括登録は調整中です。1件ずつ自動学習されます。');
+      alert('CSV一括登録は現在調整中です。1件ずつ自動学習されます。');
     } catch (err: any) {
       this.error.set(err.message || '不明なエラー');
     } finally {

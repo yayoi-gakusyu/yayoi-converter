@@ -19,7 +19,7 @@
     "@angular/forms": "^21.1.1",
     "@angular/platform-browser": "^21.1.0",
     "@google/genai": "^1.38.0",
-    "@supabase/supabase-js": "^2.94.1",
+
     "encoding-japanese": "2.2.0",
     "rxjs": "^7.8.2",
     "tailwindcss": "latest"

@@ -7,11 +7,6 @@ export interface Transaction {
   note?: string;
   account?: string;
   invoiceNumber?: string;           // Receipt mode only
-  // Supabase fields
-  id?: string;
-  source_type?: 'receipt' | 'bank' | 'credit_card';
-  source_name?: string; // Bank name or Card name
-
   taxAmount?: number;
   taxCategory?: string;
 }
