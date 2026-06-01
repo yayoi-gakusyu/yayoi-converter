@@ -1,8 +1,7 @@
 
-import { Injectable, signal, effect, inject } from '@angular/core';
+import { Injectable, signal, effect } from '@angular/core';
 import { GoogleGenAI } from '@google/genai';
 import { Rule, Transaction, TaxType, normalizeForMatch } from '../types';
-import { SupabaseService } from './supabase.service';
 import Encoding from 'encoding-japanese';
 import { calculateTaxFromCategory } from '../utils/tax';
 import { normalizeDescription, escapeCsvCell } from '../utils/format';
@@ -78,8 +77,6 @@ export const DEFAULT_PROMPT_TEMPLATE = `
 
 @Injectable({ providedIn: 'root' })
 export class ReceiptLogicService {
-  private supabase = inject(SupabaseService);
-  
   apiKey = signal<string>('');
   targetYear = signal<number>(new Date().getFullYear());
   taxType = signal<TaxType>('standard');
@@ -107,7 +104,6 @@ export class ReceiptLogicService {
 
   constructor() {
     this.loadState();
-    this.loadDataFromSupabase();
 
     effect(() => localStorage.setItem(this.prefix + 'apiKey', this.apiKey()));
     effect(() => localStorage.setItem(this.prefix + 'selectedModel', this.selectedModel()));
@@ -118,9 +114,7 @@ export class ReceiptLogicService {
     effect(() => localStorage.setItem(this.prefix + 'simplifiedTaxRate', this.simplifiedTaxRate()));
     effect(() => localStorage.setItem(this.prefix + 'showSystemColumns', String(this.showSystemColumns())));
     effect(() => localStorage.setItem(this.prefix + 'autoRedirectToEdit', String(this.autoRedirectToEdit())));
-    // LocalStorage for rules is partially obsolete as we use Supabase, but keeping it for offline/fallback or cache might be confusing.
-    // Let's rely on Supabase for rules, but populate default if empty.
-    // effect(() => localStorage.setItem(this.prefix + 'expenseRules', JSON.stringify(this.expenseRules())));
+    effect(() => localStorage.setItem(this.prefix + 'expenseRules', JSON.stringify(this.expenseRules())));
     effect(() => localStorage.setItem(this.prefix + 'expenseAccountOptions', JSON.stringify(this.expenseAccountOptions())));
 
     effect(() => localStorage.setItem(this.prefix + 'customPromptTemplate', this.customPromptTemplate()));
@@ -159,8 +153,8 @@ export class ReceiptLogicService {
     const showSys = s('showSystemColumns');
     const autoRed = s('autoRedirectToEdit');
     if (autoRed !== null) this.autoRedirectToEdit.set(autoRed === 'true');
-    // Rules are loaded from Supabase asynchronously, but we set default first
-    this.expenseRules.set([...DEFAULT_EXPENSE_RULES]);
+    const savedRules = s('expenseRules');
+    this.expenseRules.set(savedRules ? JSON.parse(savedRules) : [...DEFAULT_EXPENSE_RULES]);
     this.expenseAccountOptions.set(s('expenseAccountOptions') ? JSON.parse(s('expenseAccountOptions')!) : [...DEFAULT_EXPENSE_ACCOUNTS]);
 
 
@@ -187,28 +181,6 @@ export class ReceiptLogicService {
   updatePromptTemplate(template: string) { this.customPromptTemplate.set(template); }
   resetPromptTemplate() { this.customPromptTemplate.set(DEFAULT_PROMPT_TEMPLATE); }
 
-  private async loadDataFromSupabase() {
-    // Load rules
-    const rules = await this.supabase.getRules();
-    // Filter for receipt/expense rules if we want strict typing? 
-    // Currently learning_rules mixes them, but keyword is unique.
-    // We can just use all rules or filter by transaction_type if we added it.
-    if (rules && rules.length > 0) {
-      this.expenseRules.set(rules);
-    }
-
-    // Load transactions
-    const txs = await this.supabase.getTransactions('receipt');
-    this.processedTransactions.set(txs);
-
-    // Subscribe to changes
-    this.supabase.subscribeToChanges(async () => {
-       const newTxs = await this.supabase.getTransactions('receipt');
-       this.processedTransactions.set(newTxs);
-       const newRules = await this.supabase.getRules();
-       if (newRules && newRules.length > 0) this.expenseRules.set(newRules);
-    });
-  }
 
   async setFile(file: File) {
     this.isLoading.set(true);
@@ -303,12 +275,8 @@ export class ReceiptLogicService {
      const newRule = { ...rule, [field]: value };
      this.upsertRule(newRule.keyword, newRule.account);
   }
-  async deleteRule(index: number) { 
-    const rule = this.expenseRules()[index];
-    if (rule.id) {
-        await this.supabase.deleteRule(rule.id);
-    }
-    this.expenseRules.update(rules => rules.filter((_, i) => i !== index)); 
+  deleteRule(index: number) {
+    this.expenseRules.update(rules => rules.filter((_, i) => i !== index));
   }
 
 
@@ -345,43 +313,26 @@ export class ReceiptLogicService {
     });
     if (newRules.length > 0) {
         this.expenseRules.update(r => [...r, ...newRules]);
-        newRules.forEach(r => this.supabase.saveRule({ ...r, transaction_type: 'expense' }));
     }
   }
 
-  async updateTransaction(index: number, field: keyof Transaction, value: any) {
+  updateTransaction(index: number, field: keyof Transaction, value: any) {
     const txs = this.processedTransactions();
     const updated = { ...txs[index], [field]: value };
-    
-    // Optimistic update
+
     this.processedTransactions.update(curr => {
         const n = [...curr];
         n[index] = updated;
         return n;
     });
 
-    // Save to Supabase
-    await this.supabase.saveTransaction({
-        ...updated,
-         // Ensure core fields are present for Supabase
-        source_type: 'receipt',
-        date: updated.date,
-        description: updated.description,
-        amount: updated.amount
-    });
-
     if (field === 'account' && updated.description) {
         this.upsertRule(updated.description, value);
-        // Bulk update local for responsiveness
         this.processedTransactions.update(n => {
             const next = [...n];
             for (let i = 0; i < next.length; i++) {
                 if (i !== index && next[i].description === updated.description) {
                      next[i] = { ...next[i], account: value };
-                     // We should ideally save these "side-effect" updates to Supabase too
-                     // but to avoid storm, maybe we skip or do it silently.
-                     // For strictness, let's save:
-                     this.supabase.saveTransaction({ ...next[i], source_type: 'receipt' });
                 }
             }
             return next;
@@ -389,12 +340,8 @@ export class ReceiptLogicService {
     }
   }
 
-  async deleteTransaction(index: number) { 
-      const tx = this.processedTransactions()[index];
-      if (tx.id) {
-          await this.supabase.deleteTransaction(tx.id);
-      }
-      this.processedTransactions.update(txs => txs.filter((_, i) => i !== index)); 
+  deleteTransaction(index: number) {
+      this.processedTransactions.update(txs => txs.filter((_, i) => i !== index));
   }
 
 
@@ -405,8 +352,6 @@ export class ReceiptLogicService {
         if (idx !== -1) { const n = [...rules]; n[idx] = { ...n[idx], account }; return n; }
         return [...rules, { keyword, account }];
       });
-      // Persist
-      this.supabase.saveRule({ keyword, account, transaction_type: 'expense' });
   }
 
 
@@ -504,7 +449,6 @@ export class ReceiptLogicService {
           ...tx,
           description: desc, // AI normalized
           account,
-          source_type: 'receipt' as const,
           taxAmount: calculatedTax,
           taxCategory: expenseTaxCategory
         };
@@ -512,9 +456,6 @@ export class ReceiptLogicService {
       
       this.processedTransactions.set(txs);
       
-      // Save all new transactions to Supabase
-      txs.forEach(tx => this.supabase.saveTransaction(tx));
-
       this.extractMissingRules(txs);
 
     } catch (err: any) {

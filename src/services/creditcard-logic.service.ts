@@ -1,9 +1,8 @@
-import { Injectable, signal, effect, inject } from "@angular/core";
+import { Injectable, signal, effect } from "@angular/core";
 import { GoogleGenAI } from "@google/genai";
 import { Rule, Transaction, TaxType, normalizeForMatch } from "../types";
 import { normalizeDescription, escapeCsvCell } from "../utils/format";
 import { generateContentWithRetry } from '../utils/ai';
-import { SupabaseService } from "./supabase.service";
 import Encoding from "encoding-japanese";
 import { calculateTaxFromCategory } from '../utils/tax';
 
@@ -102,7 +101,6 @@ export const DEFAULT_PROMPT_TEMPLATE = `
 
 @Injectable({ providedIn: "root" })
 export class CreditCardLogicService {
-  private supabase = inject(SupabaseService);
 
   apiKey = signal<string>("");
   selectedCard = signal<string>("");
@@ -133,7 +131,6 @@ export class CreditCardLogicService {
 
   constructor() {
     this.loadState();
-    this.loadDataFromSupabase();
 
     effect(() => localStorage.setItem(this.prefix + "apiKey", this.apiKey()));
     effect(() =>
@@ -185,8 +182,7 @@ export class CreditCardLogicService {
         this.customPromptTemplate(),
       ),
     );
-    // Supabase for rules and transactions
-    // effect(() => this.saveRulesToSupabase()); // Don't auto-save all rules on every change, too heavy. define explicit save points.
+    effect(() => localStorage.setItem(this.prefix + 'expenseRules', JSON.stringify(this.expenseRules())));
 
     effect(() => {
       const show = this.showSystemColumns();
@@ -202,30 +198,6 @@ export class CreditCardLogicService {
         this.generateCsv(txs, card);
       }
     });
-  }
-
-  private async loadDataFromSupabase() {
-    await this.loadRulesFromSupabase();
-    // Options are local only for now
-    
-    // Load transactions
-    const txs = await this.supabase.getTransactions('credit_card');
-    this.processedTransactions.set(txs);
-     
-    this.supabase.subscribeToChanges(async () => {
-        const newTxs = await this.supabase.getTransactions('credit_card');
-        this.processedTransactions.set(newTxs);
-        await this.loadRulesFromSupabase();
-    });
-  }
-
-  private async loadRulesFromSupabase() {
-    const rules = await this.supabase.getRules();
-    if (rules && rules.length > 0) {
-      this.expenseRules.set(rules);
-    } else {
-      this.expenseRules.set([...DEFAULT_EXPENSE_RULES]);
-    }
   }
 
   private loadState() {
@@ -262,8 +234,6 @@ export class CreditCardLogicService {
     const autoRed = s("autoRedirectToEdit");
     if (showSys !== null) this.showSystemColumns.set(showSys === "true");
     if (autoRed !== null) this.autoRedirectToEdit.set(autoRed === "true");
-    // Rules, cards, accounts are loaded from Supabase now, but set defaults if not found in Supabase
-    // Actually options are local
     this.cardOptions.set(
       s("cardOptions") ? JSON.parse(s("cardOptions")!) : [...DEFAULT_CARDS],
     );
@@ -272,7 +242,8 @@ export class CreditCardLogicService {
         ? JSON.parse(s("expenseAccountOptions")!)
         : [...DEFAULT_EXPENSE_ACCOUNTS],
     );
-    // Rules default set in loadRulesFromSupabase if empty
+    const savedRules = s('expenseRules');
+    this.expenseRules.set(savedRules ? JSON.parse(savedRules) : [...DEFAULT_EXPENSE_RULES]);
 
     // Load custom prompt or set default if empty
     const savedPrompt = s("customPromptTemplate");
@@ -480,11 +451,7 @@ export class CreditCardLogicService {
     const newRule = { ...rule, [field]: value };
     this.upsertRule(newRule.keyword, newRule.account);
   }
-  async deleteRule(index: number) {
-    const ruleToDelete = this.expenseRules()[index];
-    if (ruleToDelete.id) {
-      await this.supabase.deleteRule(ruleToDelete.id);
-    }
+  deleteRule(index: number) {
     this.expenseRules.update((rules) => rules.filter((_, i) => i !== index));
   }
 
@@ -533,12 +500,11 @@ export class CreditCardLogicService {
     });
     if (newRules.length > 0) {
       this.expenseRules.update((r) => [...r, ...newRules]);
-      newRules.forEach(r => this.supabase.saveRule({ ...r, transaction_type: 'expense' }));
     }
 
   }
 
-  async updateTransaction(index: number, field: keyof Transaction, value: any) {
+  updateTransaction(index: number, field: keyof Transaction, value: any) {
     const txs = this.processedTransactions();
     const updated = { ...txs[index], [field]: value };
 
@@ -548,15 +514,6 @@ export class CreditCardLogicService {
       return n;
     });
 
-    await this.supabase.saveTransaction({
-      ...updated,
-      source_type: "credit_card",
-      source_name: this.selectedCard(),
-      date: updated.date,
-      description: updated.description,
-      amount: updated.amount,
-    });
-
     if (field === "account" && updated.description) {
       this.upsertRule(updated.description, value);
       this.processedTransactions.update((n) => {
@@ -564,11 +521,6 @@ export class CreditCardLogicService {
         for (let i = 0; i < next.length; i++) {
           if (i !== index && next[i].description === updated.description) {
             next[i] = { ...next[i], account: value };
-            this.supabase.saveTransaction({
-              ...next[i],
-              source_type: "credit_card",
-              source_name: this.selectedCard(),
-            });
           }
         }
         return next;
@@ -576,11 +528,7 @@ export class CreditCardLogicService {
     }
   }
 
-  async deleteTransaction(index: number) {
-    const tx = this.processedTransactions()[index];
-    if (tx.id) {
-      await this.supabase.deleteTransaction(tx.id);
-    }
+  deleteTransaction(index: number) {
     this.processedTransactions.update((txs) =>
       txs.filter((_, i) => i !== index),
     );
@@ -596,7 +544,6 @@ export class CreditCardLogicService {
       }
       return [...rules, { keyword, account }];
     });
-    this.supabase.saveRule({ keyword, account, transaction_type: "expense" });
   }
 
   private async getRotatedImageData(page: PageData): Promise<string> {
@@ -723,15 +670,11 @@ export class CreditCardLogicService {
             amount: Number(tx.amount) || 0, 
             note: tx.note || '', 
             account, 
-            source_type: 'credit_card' as const,
-            source_name: card,
             taxAmount,
             taxCategory: expenseTaxCategory
         };
       });
       this.processedTransactions.set(txs);
-
-      txs.forEach((tx: Transaction) => this.supabase.saveTransaction(tx));
 
       this.extractMissingRules(txs);
     } catch (err: any) {

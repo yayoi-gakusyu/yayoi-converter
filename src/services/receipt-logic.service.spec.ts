@@ -1,23 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ReceiptLogicService } from './receipt-logic.service';
-import { SupabaseService } from './supabase.service';
 
-// Mock SupabaseService
-const mockSupabase = {
-  getRules: vi.fn(),
-  getTransactions: vi.fn(),
-  subscribeToChanges: vi.fn(),
-} as unknown as SupabaseService;
-
-// Mock @angular/core inject and signals
 vi.mock('@angular/core', async () => {
     const actual = await vi.importActual('@angular/core');
     return {
         ...actual,
-        inject: (token: any) => {
-             if (token === SupabaseService) return mockSupabase;
-             return {};
-        },
+        inject: () => ({}),
         Injectable: () => (target: any) => target,
         signal: (initial: any) => {
             let value = initial;

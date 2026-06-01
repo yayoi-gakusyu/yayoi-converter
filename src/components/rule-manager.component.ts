@@ -1,7 +1,6 @@
-import { Component, OnInit, inject, signal, computed, Output, EventEmitter } from '@angular/core';
+import { Component, OnInit, signal, computed, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { SupabaseService } from '../services/supabase.service';
 import { Rule } from '../types';
 import { TAX_CATEGORIES_EXPENSE, TAX_CATEGORIES_INCOME } from '../utils/tax';
 
@@ -134,8 +133,8 @@ import { TAX_CATEGORIES_EXPENSE, TAX_CATEGORIES_INCOME } from '../utils/tax';
   `
 })
 export class RuleManagerComponent implements OnInit {
-  private supabase = inject(SupabaseService);
-  
+  private storageKey = 'rule_manager_rules';
+
   rules = signal<Rule[]>([]);
   searchQuery = signal('');
   
@@ -168,53 +167,54 @@ export class RuleManagerComponent implements OnInit {
     this.loadRules();
   }
 
-  async loadRules() {
-    const rules = await this.supabase.getRules();
-    this.rules.set(rules);
+  loadRules() {
+    const saved = localStorage.getItem(this.storageKey);
+    this.rules.set(saved ? JSON.parse(saved) : []);
   }
 
-  async addRule() {
+  private saveRules() {
+    localStorage.setItem(this.storageKey, JSON.stringify(this.rules()));
+  }
+
+  addRule() {
     if (!this.newRule.keyword || !this.newRule.account) return;
-    
+
     const rule: Rule = {
         keyword: this.newRule.keyword,
         account: this.newRule.account,
         sub_account: this.newRule.sub_account || undefined,
         taxCategory: this.newRule.taxCategory || undefined,
-        transaction_type: 'expense' // Defaulting to expense implies most rules are for expenses.
+        transaction_type: 'expense'
     };
-    
-    // Check if exists locally to warn or replace
+
     const exists = this.rules().find(r => r.keyword === rule.keyword);
     if (exists && !confirm(`キーワード "${rule.keyword}" は既に存在します。上書きしますか？`)) {
         return;
     }
 
-    await this.supabase.saveRule(rule);
-    
-    // Clear input
+    this.rules.update(rules => {
+      const idx = rules.findIndex(r => r.keyword === rule.keyword);
+      if (idx !== -1) { const n = [...rules]; n[idx] = rule; return n; }
+      return [...rules, rule];
+    });
+    this.saveRules();
     this.newRule = { keyword: '', account: '', sub_account: '', taxCategory: '' };
-    this.loadRules();
   }
 
-  async updateRule(rule: Rule) {
+  updateRule(rule: Rule) {
     if (!rule.keyword || !rule.account) return;
-    await this.supabase.saveRule(rule);
+    this.rules.update(rules => {
+      const idx = rules.findIndex(r => r.keyword === rule.keyword);
+      if (idx !== -1) { const n = [...rules]; n[idx] = { ...rule }; return n; }
+      return rules;
+    });
+    this.saveRules();
   }
 
-  async deleteRule(rule: Rule) {
+  deleteRule(rule: Rule) {
     if (!confirm(`ルール "${rule.keyword}" を削除しますか？`)) return;
-    
-    if (rule.id) {
-        await this.supabase.deleteRule(rule.id);
-    } else {
-        // Fallback if ID is missing (though upsert usually handles it if we have ID)
-        // If keyword is unique, maybe delete logic should support keyword?
-        // SupabaseService deleteRule uses ID.
-        // Assuming rules fetched from DB have IDs.
-        console.warn('Rule has no ID, cannot delete easily via ID', rule);
-    }
-    this.loadRules();
+    this.rules.update(rules => rules.filter(r => r.keyword !== rule.keyword));
+    this.saveRules();
   }
   
   @Output('close') closeEvent = new EventEmitter<void>();
