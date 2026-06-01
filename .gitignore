@@ -25,3 +25,4 @@ npm-debug.log*
 
 # Portable Node (local tool, not needed in repo)
 ../node_tool/
+html/
