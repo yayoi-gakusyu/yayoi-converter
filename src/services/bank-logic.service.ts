@@ -1,18 +1,11 @@
 
 import { Injectable, signal, effect } from '@angular/core';
-import { GoogleGenAI } from '@google/genai';
-import { Rule, Transaction, TaxType, normalizeForMatch } from '../types';
-import Encoding from 'encoding-japanese';
+import { Rule, Transaction, normalizeForMatch } from '../types';
 import { calculateTaxFromCategory } from '../utils/tax';
 import { normalizeDescription, escapeCsvCell } from '../utils/format';
-import { generateContentWithRetry } from '../utils/ai';
+import { BaseLogicService, PageData } from './base-logic.service';
 
-export interface PageData {
-  id: string;
-  image: string;
-  rotation: number;
-  pageNumber: number;
-}
+export type { PageData } from './base-logic.service';
 
 const DEFAULT_EXPENSE_RULES: Rule[] = [
   { keyword: '電話', account: '通信費' },
@@ -85,57 +78,48 @@ export const DEFAULT_PROMPT_TEMPLATE = `
 `;
 
 @Injectable({ providedIn: 'root' })
-export class BankLogicService {
-  apiKey = signal<string>('');
+export class BankLogicService extends BaseLogicService {
+  protected readonly prefix = 'bank_';
+  protected readonly defaultExpenseRules = DEFAULT_EXPENSE_RULES;
+  protected readonly defaultExpenseAccounts = DEFAULT_EXPENSE_ACCOUNTS;
+  protected readonly defaultPromptTemplate = DEFAULT_PROMPT_TEMPLATE;
+
   selectedBank = signal<string>('');
-  targetYear = signal<number>(new Date().getFullYear());
-  taxType = signal<TaxType>('standard');
-  simplifiedMethod = signal<'inclusive' | 'exclusive'>('inclusive');
-  simplifiedCalcType = signal<'internal' | 'external'>('internal');
-  simplifiedBizClass = signal<number>(5);
-  simplifiedTaxRate = signal<'10%' | '8%'>('10%');
-  showSystemColumns = signal<boolean>(true);
-  autoRedirectToEdit = signal<boolean>(true);
-  expenseRules = signal<Rule[]>([]);
   incomeRules = signal<Rule[]>([]);
   bankOptions = signal<string[]>([]);
-  expenseAccountOptions = signal<string[]>([]);
   incomeAccountOptions = signal<string[]>([]);
-  isLoading = signal<boolean>(false);
-  error = signal<string | null>(null);
-  pages = signal<PageData[]>([]);
-  currentFileName = signal<string>('');
-  isPdf = signal<boolean>(false);
-  processedTransactions = signal<Transaction[]>([]);
-  csvData = signal<string | null>(null);
-  modelList = signal<string[]>([]);
-  selectedModel = signal<string>('gemini-2.0-flash');
-  tokenUsage = signal<{input: number, output: number} | null>(null);
-  customPromptTemplate = signal<string>('');
-
-  private prefix = 'bank_';
 
   constructor() {
-    this.loadState();
+    super();
+    this.initBase();
+    this.loadBankState();
+    this.setupBankEffects();
+  }
 
-    effect(() => localStorage.setItem(this.prefix + 'apiKey', this.apiKey()));
-    effect(() => localStorage.setItem(this.prefix + 'selectedModel', this.selectedModel()));
+  private loadBankState() {
+    const s = (key: string) => localStorage.getItem(this.prefix + key);
+
+    // Legacy migration
+    const legacyBank = localStorage.getItem('selectedBank');
+    if (legacyBank && !s('selectedBank')) localStorage.setItem(this.prefix + 'selectedBank', legacyBank);
+    const legacyKeys = ['taxType', 'simplifiedMethod', 'simplifiedCalcType', 'simplifiedBizClass', 'simplifiedTaxRate',
+      'showSystemColumns', 'autoRedirectToEdit', 'expenseRules', 'incomeRules', 'bankOptions', 'expenseAccountOptions', 'incomeAccountOptions'];
+    legacyKeys.forEach(k => { const v = localStorage.getItem(k); if (v && !s(k)) localStorage.setItem(this.prefix + k, v); });
+
+    if (s('selectedBank')) this.selectedBank.set(s('selectedBank')!);
+    const savedIncRules = s('incomeRules');
+    this.incomeRules.set(savedIncRules ? JSON.parse(savedIncRules) : [...DEFAULT_INCOME_RULES]);
+    this.bankOptions.set(s('bankOptions') ? JSON.parse(s('bankOptions')!) : [...DEFAULT_BANKS]);
+    this.incomeAccountOptions.set(s('incomeAccountOptions') ? JSON.parse(s('incomeAccountOptions')!) : [...DEFAULT_INCOME_ACCOUNTS]);
+  }
+
+  private setupBankEffects() {
     effect(() => localStorage.setItem(this.prefix + 'selectedBank', this.selectedBank()));
-    effect(() => localStorage.setItem(this.prefix + 'taxType', this.taxType()));
-    effect(() => localStorage.setItem(this.prefix + 'simplifiedMethod', this.simplifiedMethod()));
-    effect(() => localStorage.setItem(this.prefix + 'simplifiedCalcType', this.simplifiedCalcType()));
-    effect(() => localStorage.setItem(this.prefix + 'simplifiedBizClass', String(this.simplifiedBizClass())));
-    effect(() => localStorage.setItem(this.prefix + 'simplifiedTaxRate', this.simplifiedTaxRate()));
-    effect(() => localStorage.setItem(this.prefix + 'showSystemColumns', String(this.showSystemColumns())));
-    effect(() => localStorage.setItem(this.prefix + 'autoRedirectToEdit', String(this.autoRedirectToEdit())));
-    effect(() => localStorage.setItem(this.prefix + 'autoRedirectToEdit', String(this.autoRedirectToEdit())));
-    effect(() => localStorage.setItem(this.prefix + 'expenseRules', JSON.stringify(this.expenseRules())));
     effect(() => localStorage.setItem(this.prefix + 'incomeRules', JSON.stringify(this.incomeRules())));
-
     effect(() => localStorage.setItem(this.prefix + 'bankOptions', JSON.stringify(this.bankOptions())));
-    effect(() => localStorage.setItem(this.prefix + 'expenseAccountOptions', JSON.stringify(this.expenseAccountOptions())));
     effect(() => localStorage.setItem(this.prefix + 'incomeAccountOptions', JSON.stringify(this.incomeAccountOptions())));
-    effect(() => localStorage.setItem(this.prefix + 'customPromptTemplate', this.customPromptTemplate()));
+
+    // CSV regeneration effect
     effect(() => {
       const show = this.showSystemColumns();
       const tType = this.taxType();
@@ -143,165 +127,33 @@ export class BankLogicService {
       const sCalc = this.simplifiedCalcType();
       const sClass = this.simplifiedBizClass();
       const sRate = this.simplifiedTaxRate();
-      const expRules = this.expenseRules(); // track rule changes
-      const incRules = this.incomeRules(); // track rule changes
+      const expRules = this.expenseRules();
+      const incRules = this.incomeRules();
       const txs = this.processedTransactions();
       const bank = this.selectedBank();
       if (txs.length > 0 && bank) this.generateCsv(txs, bank);
     });
   }
 
-  private loadState() {
-    const s = (key: string) => localStorage.getItem(this.prefix + key);
-    // Unified key checking - Prioritize unified key!
-    const unifiedKey = localStorage.getItem('unified_apiKey');
-    
-    // Legacy support
-    const legacyApiKey = localStorage.getItem('apiKey');
-    if (legacyApiKey && !unifiedKey && !s('apiKey')) {
-       localStorage.setItem(this.prefix + 'apiKey', legacyApiKey);
-    }
-
-    // Load API Key: Unified > Specific > Legacy
-    if (unifiedKey) {
-        this.apiKey.set(unifiedKey);
-    } else if (s('apiKey')) {
-        this.apiKey.set(s('apiKey')!);
-    }
-    
-    // ... rest of legacy migration for other fields ...
-    const legacyBank = localStorage.getItem('selectedBank');
-    if (legacyBank && !s('selectedBank')) localStorage.setItem(this.prefix + 'selectedBank', legacyBank);
-    const legacyKeys = ['taxType', 'simplifiedMethod', 'simplifiedCalcType', 'simplifiedBizClass', 'simplifiedTaxRate',
-      'showSystemColumns', 'autoRedirectToEdit', 'expenseRules', 'incomeRules', 'bankOptions', 'expenseAccountOptions', 'incomeAccountOptions'];
-    legacyKeys.forEach(k => { const v = localStorage.getItem(k); if (v && !s(k)) localStorage.setItem(this.prefix + k, v); });
-
-    // Load other state
-    if (s('selectedModel')) this.selectedModel.set(s('selectedModel')!);
-    if (s('selectedBank')) this.selectedBank.set(s('selectedBank')!);
-    this.taxType.set((s('taxType') as TaxType) || 'standard');
-    if (s('simplifiedMethod')) this.simplifiedMethod.set(s('simplifiedMethod') as any);
-    if (s('simplifiedCalcType')) this.simplifiedCalcType.set(s('simplifiedCalcType') as any);
-    if (s('simplifiedBizClass')) this.simplifiedBizClass.set(Number(s('simplifiedBizClass')));
-    if (s('simplifiedTaxRate')) this.simplifiedTaxRate.set(s('simplifiedTaxRate') as any);
-    const showSys = s('showSystemColumns');
-    const autoRed = s('autoRedirectToEdit');
-    if (showSys !== null) this.showSystemColumns.set(showSys === 'true');
-    if (autoRed !== null) this.autoRedirectToEdit.set(autoRed === 'true');
-    const savedExpRules = s('expenseRules');
-    const savedIncRules = s('incomeRules');
-    this.expenseRules.set(savedExpRules ? JSON.parse(savedExpRules) : [...DEFAULT_EXPENSE_RULES]);
-    this.incomeRules.set(savedIncRules ? JSON.parse(savedIncRules) : [...DEFAULT_INCOME_RULES]);
-
-    this.bankOptions.set(s('bankOptions') ? JSON.parse(s('bankOptions')!) : [...DEFAULT_BANKS]);
-    this.expenseAccountOptions.set(s('expenseAccountOptions') ? JSON.parse(s('expenseAccountOptions')!) : [...DEFAULT_EXPENSE_ACCOUNTS]);
-    this.incomeAccountOptions.set(s('incomeAccountOptions') ? JSON.parse(s('incomeAccountOptions')!) : [...DEFAULT_INCOME_ACCOUNTS]);
-    
-    // Load custom prompt or default
-    const savedPrompt = s('customPromptTemplate');
-    if (savedPrompt && savedPrompt.trim()) {
-      this.customPromptTemplate.set(savedPrompt);
-    } else {
-      this.customPromptTemplate.set(DEFAULT_PROMPT_TEMPLATE);
-    }
-  }
-
-  updateApiKey(key: string) { this.apiKey.set(key); localStorage.setItem('unified_apiKey', key); }
-  updateSelectedModel(model: string) { this.selectedModel.set(model); }
-  
-  async fetchModels() {
-    const key = this.apiKey();
-    if (!key) return;
-    try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
-      if (!response.ok) return;
-      const data = await response.json();
-      const models = (data.models || [])
-        .map((m: any) => m.name.replace('models/', ''))
-        .filter((m: string) => m.includes('gemini'));
-      this.modelList.set(models);
-    } catch (e) {
-      console.error('Model fetch failed', e);
-    }
-  }
   updateBank(bank: string) { this.selectedBank.set(bank); }
-  updateTargetYear(year: number) { this.targetYear.set(year); }
-  updateTaxType(type: TaxType) { this.taxType.set(type); }
-  updateSimplifiedMethod(val: 'inclusive' | 'exclusive') { this.simplifiedMethod.set(val); }
-  updateSimplifiedCalcType(val: 'internal' | 'external') { this.simplifiedCalcType.set(val); }
-  updateSimplifiedBizClass(val: number) { this.simplifiedBizClass.set(val); }
-  updateSimplifiedTaxRate(val: '10%' | '8%') { this.simplifiedTaxRate.set(val); }
-  updateShowSystemColumns(show: boolean) { this.showSystemColumns.set(show); }
-  updateAutoRedirectToEdit(val: boolean) { this.autoRedirectToEdit.set(val); }
-  updatePromptTemplate(template: string) { this.customPromptTemplate.set(template); }
-  resetPromptTemplate() { this.customPromptTemplate.set(DEFAULT_PROMPT_TEMPLATE); }
 
+  // --- Bank-specific rule methods (expense + income) ---
 
-  async setFile(file: File) {
-    this.isLoading.set(true);
-    this.error.set(null);
-    this.currentFileName.set(file.name);
-    this.csvData.set(null);
-    this.processedTransactions.set([]);
-    this.pages.set([]);
-    try {
-      if (file.type === 'application/pdf') {
-        this.isPdf.set(true);
-        await this.convertPdfToImages(file);
-      } else {
-        this.isPdf.set(false);
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const base64 = e.target?.result as string;
-          this.pages.set([{ id: crypto.randomUUID(), image: base64, rotation: 0, pageNumber: 1 }]);
-          this.isLoading.set(false);
-        };
-        reader.readAsDataURL(file);
-      }
-    } catch (err: any) {
-      this.error.set('ファイルの読み込みに失敗しました: ' + err.message);
-      this.isLoading.set(false);
+  override findAccount(description: string, isExpense: boolean = true): string {
+    const norm = normalizeForMatch(description);
+    const rules = isExpense ? this.expenseRules() : this.incomeRules();
+    for (const rule of rules) {
+      if (rule.keyword && rule.account && norm.includes(normalizeForMatch(rule.keyword))) return rule.account;
     }
+    return isExpense ? '雑費' : '雑収入';
   }
 
-  private async convertPdfToImages(file: File) {
-    const arrayBuffer = await file.arrayBuffer();
-    const pdfjsLib = (window as any).pdfjsLib;
-    if (!pdfjsLib) throw new Error('PDF処理ライブラリがロードされていません。');
-    if (!pdfjsLib.GlobalWorkerOptions.workerSrc) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    const totalPages = pdf.numPages;
-    const newPages: PageData[] = [];
-    for (let i = 1; i <= totalPages; i++) {
-      const page = await pdf.getPage(i);
-      const scale = 1.5;
-      const viewport = page.getViewport({ scale });
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
-      canvas.height = viewport.height;
-      canvas.width = viewport.width;
-      if (!context) throw new Error('Canvas context作成エラー');
-      await page.render({ canvasContext: context, viewport }).promise;
-      newPages.push({ id: crypto.randomUUID(), image: canvas.toDataURL('image/jpeg', 0.6), rotation: 0, pageNumber: i });
-    }
-    this.pages.set(newPages);
-    this.isLoading.set(false);
+  override findMatchingRule(description: string, isExpense: boolean = true): Rule | undefined {
+    const norm = normalizeForMatch(description);
+    const rules = isExpense ? this.expenseRules() : this.incomeRules();
+    return rules.find(r => r.keyword && r.account && norm.includes(normalizeForMatch(r.keyword)));
   }
 
-  rotatePageLeft(index: number) { this.pages.update(pages => { const n = [...pages]; n[index] = { ...n[index], rotation: (n[index].rotation - 90 + 360) % 360 }; return n; }); }
-  rotatePageRight(index: number) { this.pages.update(pages => { const n = [...pages]; n[index] = { ...n[index], rotation: (n[index].rotation + 90) % 360 }; return n; }); }
-  removePage(index: number) { this.pages.update(pages => pages.filter((_, i) => i !== index)); if (this.pages().length === 0) this.clearAllFiles(); }
-  clearAllFiles() { this.pages.set([]); this.currentFileName.set(''); this.csvData.set(null); this.processedTransactions.set([]); }
-
-  addItem(type: 'bank' | 'expenseAccount' | 'incomeAccount', item: string) {
-    if (!item.trim()) return;
-    const target = type === 'bank' ? this.bankOptions : type === 'expenseAccount' ? this.expenseAccountOptions : this.incomeAccountOptions;
-    target.update(list => list.includes(item) ? list : [...list, item]);
-  }
-  removeItem(type: 'bank' | 'expenseAccount' | 'incomeAccount', item: string) {
-    const target = type === 'bank' ? this.bankOptions : type === 'expenseAccount' ? this.expenseAccountOptions : this.incomeAccountOptions;
-    target.update(list => list.filter(i => i !== item));
-  }
   addRule(type: 'expense' | 'income') {
     this.upsertRule('新しいルール', '雑費', type === 'expense');
   }
@@ -318,21 +170,13 @@ export class BankLogicService {
     target.update(rules => rules.filter((_, i) => i !== index));
   }
 
-
-
-  findAccount(description: string, isExpense: boolean): string {
-    const norm = normalizeForMatch(description);
-    const rules = isExpense ? this.expenseRules() : this.incomeRules();
-    for (const rule of rules) {
-      if (rule.keyword && rule.account && norm.includes(normalizeForMatch(rule.keyword))) return rule.account;
-    }
-    return isExpense ? '雑費' : '雑収入';
-  }
-
-  findMatchingRule(description: string, isExpense: boolean): Rule | undefined {
-    const norm = normalizeForMatch(description);
-    const rules = isExpense ? this.expenseRules() : this.incomeRules();
-    return rules.find(r => r.keyword && r.account && norm.includes(normalizeForMatch(r.keyword)));
+  private upsertRule(keyword: string, account: string, isExpense: boolean) {
+    const sig = isExpense ? this.expenseRules : this.incomeRules;
+    sig.update(rules => {
+      const idx = rules.findIndex(r => r.keyword === keyword);
+      if (idx !== -1) { const n = [...rules]; n[idx] = { ...n[idx], account }; return n; }
+      return [...rules, { keyword, account }];
+    });
   }
 
   private extractMissingRules(transactions: Transaction[]) {
@@ -362,170 +206,52 @@ export class BankLogicService {
         addedIncNorms.add(normDesc);
       }
     });
-    if (newExp.length > 0) {
-        this.expenseRules.update(r => [...r, ...newExp]);
-    }
-    if (newInc.length > 0) {
-        this.incomeRules.update(r => [...r, ...newInc]);
-    }
-
+    if (newExp.length > 0) this.expenseRules.update(r => [...r, ...newExp]);
+    if (newInc.length > 0) this.incomeRules.update(r => [...r, ...newInc]);
   }
+
+  // --- Bank-specific transaction update (type-aware) ---
 
   updateTransaction(index: number, field: keyof Transaction, value: any) {
     const txs = this.processedTransactions();
     const updated = { ...txs[index], [field]: value };
 
     this.processedTransactions.update(curr => {
-        const n = [...curr];
-        n[index] = updated;
-        return n;
+      const n = [...curr];
+      n[index] = updated;
+      return n;
     });
 
     if (field === 'account' && updated.description) {
-        this.upsertRule(updated.description, value, updated.type === 'expense');
-        this.processedTransactions.update(n => {
-            const next = [...n];
-            for (let i = 0; i < next.length; i++) {
-                 if (i !== index && next[i].description === updated.description && next[i].type === updated.type) {
-                     next[i] = { ...next[i], account: value };
-                 }
-            }
-            return next;
-        });
-    }
-  }
-
-  deleteTransaction(index: number) {
-      this.processedTransactions.update(txs => txs.filter((_, i) => i !== index));
-  }
-
-
-  private upsertRule(keyword: string, account: string, isExpense: boolean) {
-    const sig = isExpense ? this.expenseRules : this.incomeRules;
-    sig.update(rules => {
-      const idx = rules.findIndex(r => r.keyword === keyword);
-      if (idx !== -1) { const n = [...rules]; n[idx] = { ...n[idx], account }; return n; }
-      return [...rules, { keyword, account }];
-    });
-  }
-
-
-  private async getRotatedImageData(page: PageData): Promise<string> {
-    if (page.rotation === 0) return page.image;
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        if (!ctx) { reject('Canvas context failed'); return; }
-        if (page.rotation % 180 !== 0) { canvas.width = img.height; canvas.height = img.width; } else { canvas.width = img.width; canvas.height = img.height; }
-        ctx.translate(canvas.width / 2, canvas.height / 2);
-        ctx.rotate((page.rotation * Math.PI) / 180);
-        ctx.drawImage(img, -img.width / 2, -img.height / 2);
-        resolve(canvas.toDataURL('image/jpeg', 0.6));
-      };
-      img.onerror = reject;
-      img.src = page.image;
-    });
-  }
-
-  async processImage() {
-    const key = this.apiKey();
-    const bank = this.selectedBank();
-    const year = this.targetYear();
-    const pages = this.pages();
-    if (!key) { this.error.set('APIキーを入力してください'); return; }
-    if (!bank) { this.error.set('銀行を選択してください'); return; }
-    if (pages.length === 0) { this.error.set('ファイルを選択してください'); return; }
-    this.isLoading.set(true);
-    this.isLoading.set(true);
-    this.error.set(null);
-    this.tokenUsage.set(null);
-    try {
-      const ai = new GoogleGenAI({ apiKey: key });
-      const expAccountList = this.expenseAccountOptions().join('、');
-      const incAccountList = this.incomeAccountOptions().join('、');
-      
-      let promptText = this.customPromptTemplate();
-      if (!promptText.trim()) promptText = DEFAULT_PROMPT_TEMPLATE;
-
-      promptText = promptText
-          .replace(/{{year}}/g, String(year))
-          .replace(/{{expense_account_list}}/g, expAccountList)
-          .replace(/{{income_account_list}}/g, incAccountList);
-          
-      const parts: any[] = [{ text: promptText }];
-      for (const page of pages) {
-        const rotatedImage = await this.getRotatedImageData(page);
-        const match = rotatedImage.match(/^data:(.*?);base64,(.*)$/);
-        if (match) parts.push({ inlineData: { mimeType: match[1], data: match[2] } });
-      }
-      const response = await generateContentWithRetry(ai, {
-        model: this.selectedModel(), contents: { parts }, config: { responseMimeType: 'application/json' }
-      });
-      if (response.usageMetadata) {
-        this.tokenUsage.set({
-            input: response.usageMetadata.promptTokenCount || 0,
-            output: response.usageMetadata.candidatesTokenCount || 0
-        });
-      }
-      const text = response.text;
-      if (!text) throw new Error('AIからの応答が空でした');
-      let jsonStr = text.trim();
-      jsonStr = jsonStr.replace(/^```json/i, '').replace(/^```/, '').replace(/```$/, '');
-      const data = JSON.parse(jsonStr);
-      if (!data.transactions || !Array.isArray(data.transactions)) throw new Error('期待されたJSON形式ではありませんでした');
-      
-      const taxType = this.taxType(); // Capture signal value
-      const simplifiedIncomeTax = this.getSimplifiedTaxCategoryString(); // Capture value
-
-      const txs = data.transactions.map((tx: any) => {
-        const isExpense = tx.type === 'expense';
-        const desc = tx.description || '';
-        const defaultAccount = isExpense ? '雑費' : '雑収入';
-        // Priority: rule setting > AI prediction > default
-        const ruleAccount = this.findAccount(desc, isExpense);
-        const aiAccount = tx.account || '';
-        const account = (ruleAccount !== defaultAccount) ? ruleAccount : (aiAccount || defaultAccount);
-        
-        // 6. Tax Calculation for UI
-        let taxAmount = 0;
-        const matchedRule = this.findMatchingRule(desc, isExpense);
-        
-        // Determine tax category for calculation
-        let targetTaxCat = '対象外';
-        if (tx.type === 'expense') {
-            targetTaxCat = matchedRule?.taxCategory || '課対仕入10%';
-            if (taxType === 'exempt') targetTaxCat = '対象外';
-            else if (taxType === 'simplified') targetTaxCat = '対象外';
-        } else {
-            targetTaxCat = matchedRule?.taxCategory || '課税売上10%';
-            if (taxType === 'exempt') targetTaxCat = '対象外';
-            else if (taxType === 'simplified') targetTaxCat = simplifiedIncomeTax;
+      this.upsertRule(updated.description, value, updated.type === 'expense');
+      this.processedTransactions.update(n => {
+        const next = [...n];
+        for (let i = 0; i < next.length; i++) {
+          if (i !== index && next[i].description === updated.description && next[i].type === updated.type) {
+            next[i] = { ...next[i], account: value };
+          }
         }
-
-        taxAmount = calculateTaxFromCategory(tx.amount, targetTaxCat, taxType);
-
-        return {
-          ...tx,
-          description: desc, 
-          account,
-          taxAmount,
-          taxCategory: targetTaxCat
-        };
+        return next;
       });
-      this.processedTransactions.set(txs);
-      
-      this.extractMissingRules(txs);
-
-    } catch (err: any) {
-      this.error.set('エラーが発生しました: ' + (err.message || '不明なエラー'));
-    } finally {
-      this.isLoading.set(false);
     }
   }
 
-  private getSimplifiedTaxCategoryString(): string {
+  // --- Bank-specific item management ---
+
+  addItem(type: 'bank' | 'expenseAccount' | 'incomeAccount', item: string) {
+    if (!item.trim()) return;
+    const target = type === 'bank' ? this.bankOptions : type === 'expenseAccount' ? this.expenseAccountOptions : this.incomeAccountOptions;
+    target.update(list => list.includes(item) ? list : [...list, item]);
+  }
+
+  removeItem(type: 'bank' | 'expenseAccount' | 'incomeAccount', item: string) {
+    const target = type === 'bank' ? this.bankOptions : type === 'expenseAccount' ? this.expenseAccountOptions : this.incomeAccountOptions;
+    target.update(list => list.filter(i => i !== item));
+  }
+
+  // --- Simplified tax category ---
+
+  getSimplifiedTaxCategoryString(): string {
     const method = this.simplifiedMethod();
     const calc = this.simplifiedCalcType();
     const cls = this.simplifiedBizClass();
@@ -537,6 +263,71 @@ export class BankLogicService {
     const rateStr = rate === '8%' ? '軽減8%' : '10%';
     return `課税売上${prefix}${classStr}${rateStr}`;
   }
+
+  // --- Process image using base's callGemini helper ---
+
+  async processImage() {
+    const key = this.apiKey();
+    const bank = this.selectedBank();
+    const year = this.targetYear();
+    const pages = this.pages();
+    if (!key) { this.error.set('APIキーを入力してください'); return; }
+    if (!bank) { this.error.set('銀行を選択してください'); return; }
+    if (pages.length === 0) { this.error.set('ファイルを選択してください'); return; }
+    this.isLoading.set(true);
+    this.error.set(null);
+    this.tokenUsage.set(null);
+    try {
+      const expAccountList = this.expenseAccountOptions().join('、');
+      const incAccountList = this.incomeAccountOptions().join('、');
+
+      let promptText = this.customPromptTemplate();
+      if (!promptText.trim()) promptText = DEFAULT_PROMPT_TEMPLATE;
+
+      promptText = promptText
+        .replace(/{{year}}/g, String(year))
+        .replace(/{{expense_account_list}}/g, expAccountList)
+        .replace(/{{income_account_list}}/g, incAccountList);
+
+      const data = await this.callGemini(promptText);
+
+      const taxType = this.taxType();
+      const simplifiedIncomeTax = this.getSimplifiedTaxCategoryString();
+
+      const txs = data.transactions.map((tx: any) => {
+        const isExpense = tx.type === 'expense';
+        const desc = tx.description || '';
+        const defaultAccount = isExpense ? '雑費' : '雑収入';
+        const ruleAccount = this.findAccount(desc, isExpense);
+        const aiAccount = tx.account || '';
+        const account = (ruleAccount !== defaultAccount) ? ruleAccount : (aiAccount || defaultAccount);
+
+        let targetTaxCat = '対象外';
+        const matchedRule = this.findMatchingRule(desc, isExpense);
+        if (tx.type === 'expense') {
+          targetTaxCat = matchedRule?.taxCategory || '課対仕入10%';
+          if (taxType === 'exempt') targetTaxCat = '対象外';
+          else if (taxType === 'simplified') targetTaxCat = '対象外';
+        } else {
+          targetTaxCat = matchedRule?.taxCategory || '課税売上10%';
+          if (taxType === 'exempt') targetTaxCat = '対象外';
+          else if (taxType === 'simplified') targetTaxCat = simplifiedIncomeTax;
+        }
+
+        const taxAmount = calculateTaxFromCategory(tx.amount, targetTaxCat, taxType);
+
+        return { ...tx, description: desc, account, taxAmount, taxCategory: targetTaxCat };
+      });
+      this.processedTransactions.set(txs);
+      this.extractMissingRules(txs);
+    } catch (err: any) {
+      this.error.set('エラーが発生しました: ' + (err.message || '不明なエラー'));
+    } finally {
+      this.isLoading.set(false);
+    }
+  }
+
+  // --- CSV generation and download ---
 
   generateCsv(transactions: Transaction[], bank: string) {
     const showSystem = this.showSystemColumns();
@@ -552,25 +343,23 @@ export class BankLogicService {
 
     transactions.forEach(tx => {
       const isExpense = tx.type === 'expense';
-      // Priority: tx.account (user edit / AI prediction) > rule match > default
       const matchedRule = this.findMatchingRule(tx.description, isExpense);
-      let account = tx.account || matchedRule?.account || this.findAccount(tx.description, isExpense);
+      const account = tx.account || matchedRule?.account || this.findAccount(tx.description, isExpense);
       const rawNote = tx.note ? `${tx.description} ${tx.note}` : tx.description;
       const note = normalizeDescription(rawNote);
       const amount = tx.amount.toString();
-      
+
       let expenseTaxCategory = '課対仕入10%';
       let incomeTaxCategory = '課税売上10%';
       if (taxType === 'exempt') { expenseTaxCategory = '対象外'; incomeTaxCategory = '対象外'; }
       else if (taxType === 'simplified') { expenseTaxCategory = '対象外'; incomeTaxCategory = simplifiedIncomeTax; }
-      
-      // Override with stored category (User edit) or Rule
+
       if (tx.taxCategory) {
-          if (isExpense) expenseTaxCategory = tx.taxCategory;
-          else incomeTaxCategory = tx.taxCategory;
+        if (isExpense) expenseTaxCategory = tx.taxCategory;
+        else incomeTaxCategory = tx.taxCategory;
       } else if (matchedRule?.taxCategory) {
-          if (isExpense) expenseTaxCategory = matchedRule.taxCategory;
-          else incomeTaxCategory = matchedRule.taxCategory;
+        if (isExpense) expenseTaxCategory = matchedRule.taxCategory;
+        else incomeTaxCategory = matchedRule.taxCategory;
       }
 
       const debAcc = isExpense ? account : '普通預金';
@@ -579,24 +368,21 @@ export class BankLogicService {
       const credAcc = isExpense ? '普通預金' : account;
       const credSub = isExpense ? bank : '';
       const credTax = isExpense ? '対象外' : incomeTaxCategory;
-      
+
       const absAmount = Math.abs(tx.amount);
       let calculatedTax = 0;
-      
-      // Use stored taxAmount if available, otherwise calculate
       if (tx.taxAmount !== undefined) {
-          calculatedTax = tx.taxAmount;
+        calculatedTax = tx.taxAmount;
       } else {
-          let rate = 0;
-          const targetTaxCat = isExpense ? expenseTaxCategory : incomeTaxCategory;
-          if (targetTaxCat.match(/[1１]0[%％]/)) rate = 0.1;
-          else if (targetTaxCat.match(/[8８][%％]/)) rate = 0.08;
-
-          if (rate > 0 && taxType === 'standard') {
-            calculatedTax = Math.floor(absAmount * rate / (1 + rate));
-          }
+        let rate = 0;
+        const targetTaxCat = isExpense ? expenseTaxCategory : incomeTaxCategory;
+        if (targetTaxCat.match(/[1１]0[%％]/)) rate = 0.1;
+        else if (targetTaxCat.match(/[8８][%％]/)) rate = 0.08;
+        if (rate > 0 && taxType === 'standard') {
+          calculatedTax = Math.floor(absAmount * rate / (1 + rate));
+        }
       }
-      
+
       const taxStr = calculatedTax > 0 ? calculatedTax.toString() : '';
       const debTaxAmt = isExpense ? taxStr : '';
       const credTaxAmt = !isExpense ? taxStr : '';
@@ -615,20 +401,8 @@ export class BankLogicService {
   downloadCsv() {
     const data = this.csvData();
     if (!data) return;
-    const unicodeList = [];
-    for (let i = 0; i < data.length; i++) unicodeList.push(data.charCodeAt(i));
-    const sjisCodeList = Encoding.convert(unicodeList, { to: 'SJIS', from: 'UNICODE' });
-    const uint8Array = new Uint8Array(sjisCodeList);
-    const blob = new Blob([uint8Array], { type: 'text/csv;charset=Shift_JIS' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    a.download = `弥生会計インポート_通帳_${today}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    this.downloadCsvBlob(data, `弥生会計インポート_通帳_${today}.csv`);
   }
 
   downloadManual() {
