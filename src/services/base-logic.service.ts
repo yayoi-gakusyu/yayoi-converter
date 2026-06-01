@@ -31,7 +31,7 @@ export abstract class BaseLogicService {
   processedTransactions = signal<Transaction[]>([]);
   csvData = signal<string | null>(null);
   modelList = signal<string[]>([]);
-  selectedModel = signal<string>('gemini-2.0-flash');
+  selectedModel = signal<string>('gemini-2.5-flash');
   tokenUsage = signal<{ input: number; output: number } | null>(null);
   customPromptTemplate = signal<string>('');
 
@@ -210,8 +210,8 @@ export abstract class BaseLogicService {
           .sort().reverse();
         this.modelList.set(models);
         if (models.length > 0 && !models.includes(this.selectedModel())) {
-          if (models.includes('gemini-2.0-flash')) this.selectedModel.set('gemini-2.0-flash');
-          else if (models.includes('gemini-1.5-flash')) this.selectedModel.set('gemini-1.5-flash');
+          if (models.includes('gemini-2.5-flash')) this.selectedModel.set('gemini-2.5-flash');
+          else if (models.includes('gemini-2.0-flash')) this.selectedModel.set('gemini-2.0-flash');
           else this.selectedModel.set(models[0]);
         }
       }
