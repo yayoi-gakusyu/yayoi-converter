@@ -1,20 +1,5 @@
 import { Injectable, signal } from '@angular/core';
 import { Rule, JournalPattern } from '../types';
-import * as Encoding from 'encoding-japanese';
-
-interface ParsedJournalEntry {
-  debitAccount: string;
-  debitTaxCategory: string;
-  creditAccount: string;
-  creditTaxCategory: string;
-  description: string;
-}
-
-interface LearningResult {
-  newRules: JournalPattern[];
-  updatedRules: JournalPattern[];
-  totalEntries: number;
-}
 
 @Injectable({
   providedIn: 'root'
@@ -22,11 +7,10 @@ interface LearningResult {
 export class JournalLearningService {
   private storageKey = 'journal_learning_rules';
 
-  // Signals
   learningRules = signal<Map<string, JournalPattern>>(new Map());
-  isProcessing = signal<boolean>(false);
-  lastResult = signal<LearningResult | null>(null);
-  error = signal<string>('');
+  isProcessing = signal(false);
+  lastResult = signal<any>(null);
+  error = signal('');
 
   private defaultRules: JournalPattern[] = [
     { targetDescription: 'AMAZON', account: '消耗品費' },
@@ -67,9 +51,8 @@ export class JournalLearningService {
     localStorage.setItem(this.storageKey, JSON.stringify(rules));
   }
 
-  // Helper to update local map from a Rule object
   private updateLocalRule(rule: Rule) {
-      const map = new Map(this.learningRules()); // Clone
+      const map = new Map(this.learningRules());
       map.set(this.normalize(rule.keyword), {
           targetDescription: rule.keyword,
           account: rule.account,
@@ -83,19 +66,16 @@ export class JournalLearningService {
     return text.trim();
   }
 
-  // Match a transaction description to a rule
   predict(description: string): JournalPattern | null {
     if (!description) return null;
-    
+
     const normalized = this.normalize(description);
     const rules = this.learningRules();
 
-    // 1. Exact Match
     if (rules.has(normalized)) {
       return rules.get(normalized)!;
     }
 
-    // 2. Partial Match (Simple inclusion)
     for (const [key, pattern] of rules.entries()) {
         if (normalized.includes(key)) {
             return pattern;
@@ -124,42 +104,7 @@ export class JournalLearningService {
     this.saveRulesToStorage();
   }
 
-  async processFile(file: File) {
-    // Keep existing file processing logic if needed, or stub it out as "Cloud Mode Active"
-    // For now, let's keep the CSV parsing logic just in case they want to bulk import.
-    this.isProcessing.set(true);
-    this.error.set('');
-    this.lastResult.set(null);
-
-    try {
-      const text = await this.readFileAsShiftJIS(file);
-      const entries = this.parseCsv(text);
-      // For now, just logging entries or maybe auto-learning?
-      // Leaving this logic existing just for compilation, but logic might need update.
-      // this.lastResult.set(result);
-      alert('CSV一括登録は現在調整中です。1件ずつ自動学習されます。');
-    } catch (err: any) {
-      this.error.set(err.message || '不明なエラー');
-    } finally {
-      this.isProcessing.set(false);
-    }
-  }
-
-  private async readFileAsShiftJIS(file: File): Promise<string> {
-    const buffer = await file.arrayBuffer();
-    const uint8 = new Uint8Array(buffer);
-    const detected = Encoding.detect(uint8);
-    if (detected === 'UNICODE' || detected === 'UTF8') {
-      return new TextDecoder('utf-8').decode(uint8);
-    }
-    const unicodeArray = Encoding.convert(uint8, { to: 'UNICODE', from: 'SJIS' });
-    return Encoding.codeToString(unicodeArray);
-  }
-
-  private parseCsv(text: string): ParsedJournalEntry[] {
-    const lines = text.split(/\r?\n/);
-    const entries: ParsedJournalEntry[] = [];
-    // ... (simplified or reused existing parser)
-    return entries;
+  async processFile(_file: File) {
+    alert('CSV一括登録は現在調整中です。1件ずつ自動学習されます。');
   }
 }

@@ -1249,15 +1249,4 @@
     KISS原則に基づくシンプル設計 | {{ cfg.headerTitle }}
   </div>
 
-  <!-- DEBUG OVERLAY -->
-  <div
-    class="fixed bottom-4 right-4 bg-black/80 text-white p-4 rounded-lg text-xs font-mono z-50 pointer-events-auto"
-  >
-    <div class="font-bold mb-1 text-green-400">DEBUG INFO</div>
-    <div>Mode: {{ modeService.activeMode() }}</div>
-    <div>TX Count: {{ appLogic.processedTransactions().length }}</div>
-    <div>Tab: {{ activeTab() }}</div>
-    <div>Error: {{ appLogic.error() || "None" }}</div>
-    <div>Storage: localStorage</div>
-  </div>
 </div>

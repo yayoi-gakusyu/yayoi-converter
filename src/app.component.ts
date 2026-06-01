@@ -96,10 +96,6 @@ export class AppComponent {
       const prev = this.historyService.undo();
       if (prev) {
           this.appLogic.processedTransactions.set(prev);
-          // Also simpler to just replace signal. Does appLogic expose a setter?
-          // processedTransactions is a WritableSignal in logic service.
-          // appLogic.processedTransactions.set(prev); should work if it's public.
-          // Yes it is.
       }
   }
 

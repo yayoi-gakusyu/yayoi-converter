@@ -27,7 +27,6 @@ import { TAX_CATEGORIES_EXPENSE, TAX_CATEGORIES_INCOME, calculateTaxFromCategory
             @if (hasInvoiceNumber) {
               <th class="px-3 py-3 w-40 border-b border-r border-slate-200">インボイス番号</th>
               <th class="px-3 py-3 border-b border-r border-slate-200">品目</th>
-              <th class="px-3 py-3 border-b border-r border-slate-200">品目</th>
             }
             <th class="px-3 py-3 w-32 border-b border-r border-slate-200">税区分</th>
             <th class="px-3 py-3 w-28 text-right border-b border-r border-slate-200">消費税</th>
@@ -340,13 +339,9 @@ export class TransactionGridComponent {
 
   startEditing() {
     if (this.focusedRow() !== null && this.focusedCol() !== null) {
-      // Capture original value for Esc
       const tx = this.transactions[this.focusedRow()!];
-      const field = this.focusedCol()!;
-      this.editingOriginalValue = (tx as any)[field];
-
+      this.editingOriginalValue = (tx as any)[this.focusedCol()!];
       this.isEditingState.set(true);
-      // ... existing focus logic ...
     }
   }
 
@@ -358,13 +353,11 @@ export class TransactionGridComponent {
     }
   }
 
-  // Need to use afterNextRender or effect to focus input when isEditing becomes true
   constructor() {
      effect(() => {
         if (this.isEditingState()) {
             setTimeout(() => {
                 const els = document.querySelectorAll('td input, td select');
-                // The last one added is likely the one we want if only 1 is editing at a time
                 if (els.length) (els[els.length - 1] as HTMLElement).focus();
             });
         }
@@ -416,13 +409,8 @@ export class TransactionGridComponent {
       return (tx.type === 'income' && this.hasTypeColumn) ? this.incomeOptions : this.expenseOptions;
   }
 
-  // Keyboard Navigation
   onGridKeydown(e: KeyboardEvent) {
-    // If editing, usually inputs handle keys, but Esc might bubble or capture here if we want global grid handling?
-    // Actually, when editing, the Input has focus. We need (keydown.escape) on the Input.
-    // BUT checking for Ctrl+D here (when NOT editing)
-    
-    if (this.isEditingState()) return; 
+    if (this.isEditingState()) return;
 
     const row = this.focusedRow();
     const col = this.focusedCol();
@@ -501,16 +489,6 @@ export class TransactionGridComponent {
       } else {
           this.selectedRows.set(new Set());
       }
-  }
-
-  toggleSelection(index: number) {
-    if (this.selectedRows().has(index)) {
-      this.selectedRows().delete(index);
-    } else {
-      this.selectedRows().add(index);
-    }
-    // Trigger signal update
-    this.selectedRows.set(new Set(this.selectedRows()));
   }
 
   clearSelection() {
